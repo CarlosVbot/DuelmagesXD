@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Duelo de Magos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="cosmos"></div>
+<div id="runic-circle"></div>
+
+<div id="app">
+    <header>
+        <div class="title-main">Duelo de Magos</div>
+        <div class="title-sub">Alpha · UI + Motor</div>
+    </header>
+
+    <section class="pzone enemy" id="enemyZone">
+        <div class="zone-lbl">Oponente</div>
+        <div class="zone-row">
+            <div class="avatar">
+                <img id="enemyAvatarImg" class="avatar-img" src="img/avatar-enemigo.png" alt="Avatar enemigo" />
+                <div class="avatar-name" id="enemyName">Magus Rojo</div>
+            </div>
+
+            <div class="hp-sec">
+                <div class="hp-head">
+                    <span class="hp-lbl">Vida</span>
+                    <span class="hp-val" id="enemyHpText">30 <span>/ 30</span></span>
+                </div>
+                <div class="hp-track">
+                    <div class="hp-mark"></div>
+                    <div class="hp-fill" id="enemyHpBar" style="width:100%"></div>
+                </div>
+                <div class="desp-tag" id="enemyDesperationTag">⚠ Desesperación</div>
+            </div>
+
+            <div class="obj-sec">
+                <div class="obj-lbl">Objeto</div>
+                <div class="obj-slot" id="enemyObjectSlot">
+                    <span class="obj-slot-empty">⬡</span>
+                </div>
+            </div>
+
+            <div class="deck-sec">
+                <div class="deck-pile">
+                    <div class="deck-c"></div>
+                    <div class="deck-c"></div>
+                    <div class="deck-c"></div>
+                </div>
+                <div class="deck-num" id="enemyDeckText">0</div>
+                <div class="deck-sub">cartas</div>
+            </div>
+
+            <div class="enemy-mini-hand" id="enemyHandBacks"></div>
+        </div>
+    </section>
+
+    <section id="combat">
+        <span class="combat-lbl">campo de batalla</span>
+        <div class="turn-ind">
+            <div class="turn-dot"></div>
+            <span class="turn-txt" id="turnText">—</span>
+        </div>
+        <span class="phase-pill" id="phasePill">Sin partida</span>
+        <span class="reaction-hint" id="reactionHint"></span>
+    </section>
+
+    <section class="pzone player" id="playerZone">
+        <div class="zone-lbl">Jugador</div>
+        <div class="zone-row">
+            <div class="avatar">
+                <img id="playerAvatarImg" class="avatar-img" src="img/avatar-jugador.png" alt="Avatar jugador" />
+                <div class="avatar-name" id="playerName">Carlos</div>
+            </div>
+
+            <div class="hp-sec">
+                <div class="hp-head">
+                    <span class="hp-lbl">Vida</span>
+                    <span class="hp-val" id="playerHpText">30 <span>/ 30</span></span>
+                </div>
+                <div class="hp-track">
+                    <div class="hp-mark"></div>
+                    <div class="hp-fill" id="playerHpBar" style="width:100%"></div>
+                </div>
+                <div class="desp-tag" id="playerDesperationTag">⚠ Desesperación</div>
+            </div>
+
+            <div class="obj-sec">
+                <div class="obj-lbl">Objeto</div>
+                <div class="obj-slot" id="playerObjectSlot">
+                    <span class="obj-slot-empty">⬡</span>
+                </div>
+            </div>
+
+            <div class="deck-sec">
+                <div class="deck-pile">
+                    <div class="deck-c"></div>
+                    <div class="deck-c"></div>
+                    <div class="deck-c"></div>
+                </div>
+                <div class="deck-num" id="playerDeckText">0</div>
+                <div class="deck-sub">cartas</div>
+            </div>
+        </div>
+    </section>
+
+    <section id="hand-wrap">
+        <div class="hand-lbl">Tu mano</div>
+        <div id="hand"></div>
+    </section>
+
+    <section id="bottom-grid">
+        <div class="panel">
+            <div class="panel-title">Carta seleccionada</div>
+            <div id="cardDetail" class="card-detail">
+                <span class="muted">Ninguna carta seleccionada.</span>
+            </div>
+
+            <div class="act-grid">
+                <button class="btn primary" id="btnPlay" disabled>Jugar carta</button>
+                <button class="btn gold" id="btnToSpell" disabled>→ Fase de hechizo</button>
+                <button class="btn" id="btnEndTurn" disabled>Terminar turno</button>
+                <button class="btn secondary" id="btnPassReaction" disabled>Pasar reacción</button>
+
+                <div class="btn-row">
+                    <button class="btn sm primary" id="btnNewGame">Nueva partida</button>
+                    <button class="btn sm danger" id="btnAutoBattle">Auto partida</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Registro de combate</div>
+            <div id="logBox" class="log-box"></div>
+
+            <div class="stats">
+                <div class="stat-row"><span>Turno</span><strong id="statTurn">—</strong></div>
+                <div class="stat-row"><span>Descarte tuyo</span><strong id="statPlayerDiscard">0</strong></div>
+                <div class="stat-row"><span>Mano rival</span><strong id="statEnemyHand">0</strong></div>
+                <div class="stat-row"><span>Descarte rival</span><strong id="statEnemyDiscard">0</strong></div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div id="gameoverOverlay">
+    <div class="go-box">
+        <div class="go-title" id="gameoverTitle">—</div>
+        <div class="go-sub" id="gameoverSub">—</div>
+        <div class="go-stats" id="gameoverStats"></div>
+        <button class="btn primary full" id="btnRestartOverlay">Jugar de nuevo</button>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
