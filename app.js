@@ -6,8 +6,8 @@ const MAX_COPIES = 3;
 const MAX_TURNS = 100;
 
 const AVATARS = {
-    player: { name: "Carlos", src: "img/avatar-jugador.png" },
-    enemy:  { name: "Magus Rojo", src: "img/avatar-enemigo.png" }
+    player: { name: "Carlos", src: "https://ibb.co/DfYGYdp9" },
+    enemy:  { name: "Magus Rojo", src: "https://ibb.co/350zwMRm" }
 };
 
 const CARD_POOL = [
