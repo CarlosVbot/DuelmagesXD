@@ -6,8 +6,8 @@ const MAX_COPIES = 3;
 const MAX_TURNS = 100;
 
 const AVATARS = {
-    player: { name: "Carlos", src: "https://ibb.co/DfYGYdp9" },
-    enemy:  { name: "Magus Rojo", src: "https://ibb.co/350zwMRm" }
+    player: { name: "Carlos", src: "https://i.ibb.co/zVF8FdJX/Bruja-m-gica-de-cabellera-pastel.png" },
+    enemy:  { name: "Magus Rojo", src: "https://i.ibb.co/7xG4HRkt/Chat-GPT-Image-13-abr-2026-10-07-15.png" }
 };
 
 const CARD_POOL = [
