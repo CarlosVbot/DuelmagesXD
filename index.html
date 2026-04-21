@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Duelo de Magos v2</title>
+    <title>Duelo de Magos v3</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
@@ -13,14 +13,31 @@
 <div id="cosmos"></div>
 <div id="runic-circle"></div>
 
-<!-- Phase transition banner -->
+<!-- ═══ ONBOARDING TUTORIAL ═══ -->
+<div id="tutorialOverlay" class="tutorial-overlay">
+    <div class="tutorial-box">
+        <div class="tutorial-progress">
+            <div class="tutorial-dots" id="tutorialDots"></div>
+            <button class="tutorial-skip" id="tutorialSkip">Saltar ›</button>
+        </div>
+        <div class="tutorial-slide" id="tutorialSlide">
+            <!-- Filled by JS -->
+        </div>
+        <div class="tutorial-nav">
+            <button class="tutorial-btn tutorial-prev" id="tutorialPrev">‹ Anterior</button>
+            <button class="tutorial-btn tutorial-next" id="tutorialNext">Siguiente ›</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Phase transition banner ═══ -->
 <div id="phaseBanner" class="phase-banner">
     <div class="phase-banner-icon"></div>
     <div class="phase-banner-text"></div>
     <div class="phase-banner-sub"></div>
 </div>
 
-<!-- Card cast cinematic -->
+<!-- ═══ Card cast cinematic ═══ -->
 <div id="castCinematic" class="cast-cinematic">
     <div class="cast-ring ring1"></div>
     <div class="cast-ring ring2"></div>
@@ -32,7 +49,7 @@
     <div class="cast-particles" id="castParticles"></div>
 </div>
 
-<!-- Draw card animation overlay -->
+<!-- ═══ Draw card animation ═══ -->
 <div id="drawOverlay" class="draw-overlay">
     <div class="draw-card-anim" id="drawCardAnim">
         <div class="draw-card-glow"></div>
@@ -40,7 +57,7 @@
     </div>
 </div>
 
-<!-- Floating card detail popup -->
+<!-- ═══ Floating card detail popup ═══ -->
 <div id="cardPopup" class="card-popup">
     <div class="card-popup-inner">
         <button class="card-popup-close" id="cardPopupClose">✕</button>
@@ -49,10 +66,21 @@
     </div>
 </div>
 
+<!-- ═══ Big hit flash overlay ═══ -->
+<div id="hitFlash" class="hit-flash"></div>
+
+<!-- ═══ AI thinking indicator ═══ -->
+<div id="aiThinking" class="ai-thinking">
+    <div class="ai-thinking-dots">
+        <span></span><span></span><span></span>
+    </div>
+    <div class="ai-thinking-text">Magus Rojo está pensando...</div>
+</div>
+
 <div id="app">
     <header>
         <div class="title-main">Duelo de Magos</div>
-        <div class="title-sub">v2 · Edición Mejorada</div>
+        <div class="title-sub">v3 · Edición Mejorada</div>
         <div class="header-buttons">
             <button class="hdr-btn hdr-new" id="btnNewGame" title="Nueva partida">⚔️ Nueva</button>
             <button class="hdr-btn hdr-auto" id="btnAutoBattle" title="Auto partida">🤖 Auto</button>
@@ -61,6 +89,7 @@
         </div>
     </header>
 
+    <!-- ═══ ENEMY ZONE ═══ -->
     <section class="pzone enemy" id="enemyZone">
         <div class="zone-lbl">Oponente</div>
         <div class="zone-row">
@@ -90,7 +119,7 @@
         </div>
     </section>
 
-    <!-- COMBAT ZONE -->
+    <!-- ═══ COMBAT ZONE ═══ -->
     <section id="combat">
         <div class="combat-info">
             <span class="combat-lbl">campo de batalla</span>
@@ -98,6 +127,8 @@
             <span class="phase-pill" id="phasePill">Sin partida</span>
             <span class="reaction-hint" id="reactionHint"></span>
         </div>
+        <!-- Phase guidance hint -->
+        <div class="phase-guide" id="phaseGuide"></div>
         <div class="combat-stats" id="combatStats">
             <span class="cs-item">Turno <strong id="statTurn">—</strong></span>
             <span class="cs-sep">·</span>
@@ -112,6 +143,7 @@
         </div>
     </section>
 
+    <!-- ═══ PLAYER ZONE ═══ -->
     <section class="pzone player" id="playerZone">
         <div class="zone-lbl">Jugador</div>
         <div class="zone-row">
@@ -140,13 +172,17 @@
         </div>
     </section>
 
+    <!-- ═══ HAND ═══ -->
     <section id="hand-wrap">
-        <div class="hand-lbl">Tu mano</div>
+        <div class="hand-header">
+            <span class="hand-lbl">Tu mano</span>
+            <span class="hand-count" id="handCount">0 cartas</span>
+        </div>
         <div id="hand"></div>
     </section>
 </div>
 
-<!-- Game Over -->
+<!-- ═══ GAME OVER ═══ -->
 <div id="gameoverOverlay">
     <div class="go-box">
         <div class="go-title" id="gameoverTitle">—</div>
@@ -156,7 +192,7 @@
     </div>
 </div>
 
-<!-- Log Modal -->
+<!-- ═══ LOG MODAL ═══ -->
 <div id="logOverlay" class="log-overlay">
     <div class="log-modal">
         <div class="log-modal-header">
@@ -167,7 +203,7 @@
     </div>
 </div>
 
-<!-- Rules Modal -->
+<!-- ═══ RULES MODAL ═══ -->
 <div id="rulesOverlay" class="rules-overlay">
     <div class="rules-box">
         <button class="rules-close" id="btnCloseRules">✕</button>
