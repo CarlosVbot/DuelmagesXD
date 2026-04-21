@@ -15,6 +15,7 @@ let CARD_POOL = [];
 let G = null;
 let selectedHandIndex = null;
 let humanReactionResolver = null;
+let tutorialShown = false;
 
 const $ = (id) => document.getElementById(id);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,7 +32,90 @@ function isSpellLike(c) { return c.type==="spell"||c.type==="quick"||c.type==="c
 function log(msg, cls="") { G.logs.unshift({msg,cls}); if(G.logs.length>120) G.logs.pop(); }
 function labelForType(t) { if(t==="spell")return"Hechizo";if(t==="quick")return"Rápido";if(t==="perm")return"Permanente";return"Consumible"; }
 
-/* ═══ CARD ART ═══ */
+/* ═══════════════ TUTORIAL SYSTEM ═══════════════ */
+const TUTORIAL_SLIDES = [
+    {
+        icon: "⚔️",
+        title: "Bienvenido al Duelo",
+        body: `Dos magos se enfrentan en un duelo arcano. Tu objetivo: reducir la vida de tu rival a <strong>0 HP</strong>.<br><br>Ambos empiezan con <span class="tut-highlight tut-hp">30 HP</span>`
+    },
+    {
+        icon: "❤️‍🔥",
+        title: "Tu Vida es tu Poder",
+        body: `A diferencia de otros juegos de cartas, aquí <strong>no hay maná</strong>. Tus cartas se pagan con tu propia <span class="tut-highlight tut-hp">vida</span>.<br><br>Cada carta tiene un costo en HP. Jugar una carta de costo 4 te quita 4 HP. ¡Gasta con cuidado!`
+    },
+    {
+        icon: "⚠️",
+        title: "Desesperación",
+        body: `Cuando tu vida baja a <span class="tut-highlight tut-desp">14 HP o menos</span>, entras en <strong>Desesperación</strong>.<br><br>Todas tus cartas cuestan <strong>la mitad</strong>. Es tu última oportunidad para un contraataque devastador.`
+    },
+    {
+        icon: "🃏",
+        title: "Tipos de Carta",
+        body: `<span class="tut-highlight tut-spell">Hechizo</span> Ataque principal. 1 por turno.<br><span class="tut-highlight tut-quick">Rápido</span> Respuesta instantánea.<br><span class="tut-highlight tut-perm">Permanente</span> Efecto pasivo continuo.<br><span class="tut-highlight tut-cons">Consumible</span> Uso inmediato único.`
+    },
+    {
+        icon: "📋",
+        title: "Tu Turno",
+        body: `Cada turno sigue estas fases:<br><br><strong>1.</strong> Robas 1 carta<br><strong>2.</strong> Juegas Permanentes y Consumibles<br><strong>3.</strong> Lanzas 1 Hechizo Normal<br><strong>4.</strong> Terminas tu turno<br><br><em>Toca una carta para ver sus detalles y jugarla.</em>`
+    }
+];
+
+let tutorialSlideIdx = 0;
+
+function showTutorial() {
+    tutorialSlideIdx = 0;
+    const overlay = $("tutorialOverlay");
+    overlay.classList.add("on");
+    renderTutorialSlide();
+}
+
+function closeTutorial() {
+    $("tutorialOverlay").classList.remove("on");
+    tutorialShown = true;
+}
+
+function renderTutorialSlide() {
+    const slide = TUTORIAL_SLIDES[tutorialSlideIdx];
+    const container = $("tutorialSlide");
+    container.innerHTML = `
+        <div class="tutorial-slide-icon">${slide.icon}</div>
+        <div class="tutorial-slide-title">${slide.title}</div>
+        <div class="tutorial-slide-body">${slide.body}</div>
+    `;
+
+    // Dots
+    const dots = $("tutorialDots");
+    dots.innerHTML = "";
+    TUTORIAL_SLIDES.forEach((_, i) => {
+        const dot = document.createElement("div");
+        dot.className = `tutorial-dot ${i === tutorialSlideIdx ? "active" : i < tutorialSlideIdx ? "done" : ""}`;
+        dots.appendChild(dot);
+    });
+
+    // Nav buttons
+    $("tutorialPrev").disabled = tutorialSlideIdx === 0;
+    const isLast = tutorialSlideIdx === TUTORIAL_SLIDES.length - 1;
+    $("tutorialNext").textContent = isLast ? "¡A jugar! ⚔️" : "Siguiente ›";
+}
+
+function tutorialNext() {
+    if (tutorialSlideIdx < TUTORIAL_SLIDES.length - 1) {
+        tutorialSlideIdx++;
+        renderTutorialSlide();
+    } else {
+        closeTutorial();
+    }
+}
+
+function tutorialPrev() {
+    if (tutorialSlideIdx > 0) {
+        tutorialSlideIdx--;
+        renderTutorialSlide();
+    }
+}
+
+/* ═══════════════ CARD ART ═══════════════ */
 function cardArtHTML(card, size="28px") {
     if(card.art_url) return `<img src="${card.art_url}" alt="${card.name}" style="width:100%;height:100%;object-fit:cover;border-radius:4px" onerror="this.style.display='none';this.nextSibling.style.display='flex'"><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:${size}">${card.art}</span>`;
     return `<span style="font-size:${size}">${card.art}</span>`;
@@ -41,7 +125,7 @@ function castArtHTML(card) {
     return card.art;
 }
 
-/* ═══ ANIMATIONS ═══ */
+/* ═══════════════ ANIMATIONS ═══════════════ */
 async function showPhaseBanner(icon,text,sub="",dur=1100) {
     const b=$("phaseBanner"); b.querySelector(".phase-banner-icon").textContent=icon;
     b.querySelector(".phase-banner-text").textContent=text; b.querySelector(".phase-banner-sub").textContent=sub;
@@ -74,15 +158,82 @@ function showResolvingCard(card) {
     document.body.appendChild(el);setTimeout(()=>el.remove(),450);
 }
 function showReactionBanner(text) { const el=document.createElement("div");el.className="react-banner";el.textContent=text;document.body.appendChild(el);setTimeout(()=>el.remove(),1700); }
-function floatingDamage(side,amount,kind="dmg") {
-    const zone=$(side==="player"?"playerZone":"enemyZone");const r=zone.getBoundingClientRect();
-    const el=document.createElement("div");el.className=`dmg-float ${kind}`;el.textContent=kind==="heal"?`+${amount}`:`-${amount}`;
-    el.style.left=`${r.left+r.width/2-16}px`;el.style.top=`${r.top+r.height/2}px`;
-    document.body.appendChild(el);setTimeout(()=>el.remove(),850);
+
+/* ═══════════════ VISUAL JUICE ═══════════════ */
+function getDamageSize(amount) {
+    if (amount <= 2) return "small";
+    if (amount <= 4) return "medium";
+    if (amount <= 6) return "large";
+    return "huge";
 }
+
+function floatingDamage(side, amount, kind="dmg") {
+    const zone = $(side === "player" ? "playerZone" : "enemyZone");
+    const r = zone.getBoundingClientRect();
+    const el = document.createElement("div");
+    const sizeClass = getDamageSize(amount);
+    el.className = `dmg-float ${kind} ${sizeClass}`;
+    el.textContent = kind === "heal" ? `+${amount}` : `-${amount}`;
+    el.style.left = `${r.left + r.width/2 - 16 + (rand(30) - 15)}px`;
+    el.style.top = `${r.top + r.height/2 - 10}px`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 850);
+}
+
+function triggerHitFlash(amount, isHeal = false) {
+    const flash = $("hitFlash");
+    flash.className = "hit-flash";
+    if (isHeal) {
+        flash.classList.add("heal");
+    } else if (amount >= 6) {
+        flash.classList.add("big-red");
+    } else {
+        flash.classList.add("red");
+    }
+    setTimeout(() => { flash.className = "hit-flash"; }, 500);
+}
+
+function triggerScreenShake(amount) {
+    const app = $("app");
+    app.classList.remove("screen-shake", "big-screen-shake");
+    void app.offsetWidth; // force reflow
+    if (amount >= 6) {
+        app.classList.add("big-screen-shake");
+    } else if (amount >= 3) {
+        app.classList.add("screen-shake");
+    }
+    setTimeout(() => app.classList.remove("screen-shake", "big-screen-shake"), 500);
+}
+
+function triggerZonePulse(side, kind = "hit") {
+    const zone = $(side === "player" ? "playerZone" : "enemyZone");
+    zone.classList.remove("hit-pulse", "heal-pulse");
+    void zone.offsetWidth;
+    zone.classList.add(kind === "heal" ? "heal-pulse" : "hit-pulse");
+    setTimeout(() => zone.classList.remove("hit-pulse", "heal-pulse"), 500);
+}
+
+function flashHpValue(prefix, kind = "dmg") {
+    const el = $(`${prefix}HpText`);
+    el.classList.remove("flash-red", "flash-green");
+    void el.offsetWidth;
+    el.classList.add(kind === "heal" ? "flash-green" : "flash-red");
+    setTimeout(() => el.classList.remove("flash-red", "flash-green"), 600);
+}
+
 function shakeEl(id) { const el=$(id);if(!el)return;el.classList.add("shake");setTimeout(()=>el.classList.remove("shake"),360); }
 
-/* ═══ NAME EDITING ═══ */
+/* ═══════════════ AI THINKING ═══════════════ */
+function showAiThinking(name) {
+    const el = $("aiThinking");
+    el.querySelector(".ai-thinking-text").textContent = `${name} está pensando...`;
+    el.classList.add("show");
+}
+function hideAiThinking() {
+    $("aiThinking").classList.remove("show");
+}
+
+/* ═══════════════ NAME EDITING ═══════════════ */
 function setupNameEditing(labelId,inputId,key) {
     const label=$(labelId),input=$(inputId);
     label.addEventListener("click",e=>{e.stopPropagation();label.style.display="none";input.style.display="block";input.value=AVATARS[key].name;input.focus();input.select();});
@@ -91,22 +242,18 @@ function setupNameEditing(labelId,inputId,key) {
     input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();commit();}if(e.key==="Escape"){input.value=AVATARS[key].name;commit();}});
 }
 
-/* ═══ FLOATING CARD POPUP ═══ */
+/* ═══════════════ FLOATING CARD POPUP ═══════════════ */
 function showCardPopup(cardEl,card,playable) {
     const popup=$("cardPopup");
     const player=G.players[0];
     const effCost=effectiveCost(player,card);
     const isReact=G.phase==="reaction";
 
-    // Preview
     const preview=$("cardPopupPreview");
     if(card.art_url) preview.innerHTML=`<img src="${card.art_url}" alt="${card.name}" onerror="this.parentElement.innerHTML='<span style=font-size:48px>${card.art}</span>'">`;
     else preview.innerHTML=`<span style="font-size:48px">${card.art}</span>`;
 
-    // Type color
     const bc=card.type==="spell"?"rgba(124,77,255,.4)":card.type==="quick"?"rgba(255,171,64,.4)":card.type==="perm"?"rgba(0,191,165,.35)":"rgba(100,255,218,.2)";
-
-    // Info
     const info=$("cardPopupInfo");
     info.innerHTML=`
         <div class="cp-type" style="background:${bc};color:var(--text2)">${labelForType(card.type)}</div>
@@ -117,7 +264,6 @@ function showCardPopup(cardEl,card,playable) {
         <div class="cp-status ${playable?"cp-playable":"cp-unplayable"}">${playable?"✓ Jugable ahora":"✗ No jugable en esta fase"}</div>
     `;
 
-    // Play button inside popup
     const existingBtn=info.querySelector(".card-popup-play");
     if(existingBtn) existingBtn.remove();
     if(playable) {
@@ -128,33 +274,47 @@ function showCardPopup(cardEl,card,playable) {
         info.appendChild(btn);
     }
 
-    // Position popup next to the card
     const rect=cardEl.getBoundingClientRect();
-    const popW=260;
-    const vw=window.innerWidth;
-    const vh=window.innerHeight;
-
-    let left=rect.right+12;
-    let top=rect.top-20;
-
-    // If no room on right, put on left
+    const popW=260,vw=window.innerWidth,vh=window.innerHeight;
+    let left=rect.right+12,top=rect.top-20;
     if(left+popW>vw-10) left=rect.left-popW-12;
-    // If still off screen, center below
     if(left<10) { left=Math.max(10,rect.left+rect.width/2-popW/2); top=rect.bottom+10; }
-    // Clamp vertical
     if(top<10) top=10;
     if(top+300>vh) top=Math.max(10,vh-310);
-
-    popup.style.left=`${left}px`;
-    popup.style.top=`${top}px`;
-    popup.classList.add("show");
+    popup.style.left=`${left}px`;popup.style.top=`${top}px`;popup.classList.add("show");
 }
 
-function hideCardPopup() {
-    $("cardPopup").classList.remove("show");
+function hideCardPopup() { $("cardPopup").classList.remove("show"); }
+
+/* ═══════════════ PHASE GUIDANCE ═══════════════ */
+function getPhaseGuideText() {
+    if (!G || G.over) return "";
+    if (G.activeIdx !== 0) return "Esperando al oponente...";
+
+    switch (G.phase) {
+        case "objects":
+            const hasObj = G.players[0].hand.some(c => (c.type === "perm" || c.type === "consumable") && canAfford(G.players[0], c));
+            if (hasObj) return "Toca una carta Permanente o Consumible para jugarla, o avanza a la <span class='guide-key'>Fase de Hechizo</span>";
+            return "No tienes objetos jugables. Avanza a la <span class='guide-key'>Fase de Hechizo</span>";
+        case "spell":
+            const hasSpell = G.players[0].hand.some(c => c.type === "spell" && canAfford(G.players[0], c));
+            if (hasSpell) return "Elige un Hechizo Normal para lanzar, o <span class='guide-key'>Termina tu turno</span>";
+            return "No tienes hechizos jugables. <span class='guide-key'>Termina tu turno</span>";
+        case "reaction":
+            if (G.reaction?.active && G.reaction.reactorIdx === 0) {
+                const hasQuick = G.players[0].hand.some(c => c.type === "quick" && canAfford(G.players[0], c));
+                if (hasQuick) return "¡Tu oponente lanzó algo! Responde con un <span class='guide-key'>Hechizo Rápido</span> o pasa";
+                return "No tienes respuestas disponibles. <span class='guide-key'>Pasa la reacción</span>";
+            }
+            return "El oponente decide si responde...";
+        case "end":
+            return "<span class='guide-key'>Termina tu turno</span> para continuar";
+        default:
+            return "";
+    }
 }
 
-/* ═══ DECK / PLAYER ═══ */
+/* ═══════════════ DECK / PLAYER ═══════════════ */
 function createDeck(){const counts={},deck=[];while(deck.length<DECK_SIZE){const t=CARD_POOL[rand(CARD_POOL.length)];counts[t.id]=counts[t.id]||0;if(counts[t.id]<MAX_COPIES){counts[t.id]++;deck.push(cloneCard(t));}}return shuffle(deck);}
 function createPlayer(name,human){return{name,human,hp:MAX_HP,deck:createDeck(),hand:[],discard:[],permanent:null,shield:0,aura:{},flags:{spellCastThisTurn:false,firstSpellBonusUsed:false,firstQuickOnEnemyTurnUsed:false,spellDamagePreventUsed:false,preventDiscardUsed:false}};}
 
@@ -182,26 +342,52 @@ async function drawCard(player,amount=1,reason="robo",animate=true){
         else if(animate&&!player.human){const pile=$("enemyDeckPile");if(pile){pile.classList.add("drawing");setTimeout(()=>pile.classList.remove("drawing"),400);}await wait(180);}}
 }
 
-/* ═══ DAMAGE / HEAL ═══ */
+/* ═══════════════ DAMAGE / HEAL ═══════════════ */
 function rawDamage(t,v){t.hp-=v;if(t.hp<0)t.hp=0;}
 function damage(tp,amount,sp=null,sc=null,refl=true){
     if(G.over||amount<=0)return;let fa=amount;
     if(tp.shield>0){const b=Math.min(tp.shield,fa);tp.shield-=b;fa-=b;if(b>0)log(`🛡 ${tp.name} bloquea ${b} daño.`,"sys");}
     if(fa>0&&sc&&isSpellLike(sc)&&tp.aura.preventSpellDamageOnceEachTurn&&!tp.flags.spellDamagePreventUsed){const pr=Math.min(tp.aura.preventSpellDamageOnceEachTurn,fa);fa-=pr;tp.flags.spellDamagePreventUsed=true;if(pr>0)log(`🛡 ${tp.name} previene ${pr}.`,"sys");}
-    if(fa<=0)return;rawDamage(tp,fa);log(`💥 ${tp.name} recibe ${fa} daño → ${tp.hp} HP.`,"dmg");floatingDamage(G.players.indexOf(tp)===0?"player":"enemy",fa,"dmg");
+    if(fa<=0)return;
+    rawDamage(tp,fa);
+    log(`💥 ${tp.name} recibe ${fa} daño → ${tp.hp} HP.`,"dmg");
+
+    const side = G.players.indexOf(tp) === 0 ? "player" : "enemy";
+    floatingDamage(side, fa, "dmg");
+    triggerZonePulse(side, "hit");
+    flashHpValue(side, "dmg");
+
+    // Screen shake + flash proportional to damage
+    if (fa >= 3) {
+        triggerScreenShake(fa);
+        triggerHitFlash(fa, false);
+    }
+
     if(tp.hp<=0){G.over=true;G.winnerIdx=sp?G.players.indexOf(sp):otherIndex(G.players.indexOf(tp));return;}
     if(refl&&sp&&tp.aura.reflectDamageWhenHit>0&&sp.hp>0){const r=tp.aura.reflectDamageWhenHit;rawDamage(sp,r);log(`↩ ${tp.name} refleja ${r} daño.`,"react");floatingDamage(G.players.indexOf(sp)===0?"player":"enemy",r,"dmg");if(sp.hp<=0){G.over=true;G.winnerIdx=G.players.indexOf(tp);}}
 }
-function heal(p,amount,sc=null){if(G.over||amount<=0)return;let fa=amount;if(sc&&sc.type==="spell"&&p.aura.buffSelfHealSpells)fa+=p.aura.buffSelfHealSpells;const b=p.hp;p.hp=Math.min(MAX_HP,p.hp+fa);const g=p.hp-b;if(g>0){log(`❤ ${p.name} recupera ${g} HP → ${p.hp} HP.`,"heal");floatingDamage(G.players.indexOf(p)===0?"player":"enemy",g,"heal");}}
+
+function heal(p,amount,sc=null){
+    if(G.over||amount<=0)return;let fa=amount;if(sc&&sc.type==="spell"&&p.aura.buffSelfHealSpells)fa+=p.aura.buffSelfHealSpells;const b=p.hp;p.hp=Math.min(MAX_HP,p.hp+fa);const g=p.hp-b;
+    if(g>0){
+        log(`❤ ${p.name} recupera ${g} HP → ${p.hp} HP.`,"heal");
+        const side = G.players.indexOf(p) === 0 ? "player" : "enemy";
+        floatingDamage(side, g, "heal");
+        triggerZonePulse(side, "heal");
+        flashHpValue(side, "heal");
+        if (g >= 4) triggerHitFlash(g, true);
+    }
+}
+
 function discardRandom(ep,n){for(let i=0;i<n;i++){if(!ep.hand.length)return;if(ep.aura.preventFirstDiscardAgainstSelfEachTurn&&!ep.flags.preventDiscardUsed){ep.flags.preventDiscardUsed=true;log(`✨ ${ep.name} evita un descarte.`,"sys");continue;}const idx=rand(ep.hand.length);const[c]=ep.hand.splice(idx,1);ep.discard.push(c);log(`🗑 ${ep.name} descarta ${c.name}.`,"sys");}}
 
-/* ═══ COUNTER ═══ */
+/* ═══════════════ COUNTER ═══════════════ */
 function hasCounterEffect(c,a){return c.effects.some(fx=>fx.action===a);}
 function isCounterCard(c){return c.effects.some(fx=>["counter_spell","counter_quick","counter_consumable","counter_spell_if_from_enemy","counter_any_spell_in_chain"].includes(fx.action));}
 function findCounterTarget(){for(let i=G.stack.length-1;i>=0;i--){if(!G.stack[i].canceled)return G.stack[i];}return null;}
 function counterMatches(card,te,ci){if(!te)return false;const tc=te.card,isE=te.casterIdx!==ci;if(hasCounterEffect(card,"counter_any_spell_in_chain"))return tc.type==="spell"||tc.type==="quick";if(hasCounterEffect(card,"counter_spell_if_from_enemy"))return isE&&(tc.type==="spell"||tc.type==="quick");if(hasCounterEffect(card,"counter_spell"))return tc.type==="spell"||tc.type==="quick";if(hasCounterEffect(card,"counter_quick"))return tc.type==="quick";if(hasCounterEffect(card,"counter_consumable"))return tc.type==="consumable";return false;}
 
-/* ═══ EFFECTS ═══ */
+/* ═══════════════ EFFECTS ═══════════════ */
 function applyPermanent(c,card){const old=c.permanent;if(old&&c.aura.drawSelfWhenReplaced)drawCard(c,c.aura.drawSelfWhenReplaced,"reemplazo",false);if(old){c.discard.push(old);log(`🔁 ${c.name} reemplaza ${old.name}.`,"sys");}else log(`🧿 ${c.name} coloca ${card.name}.`,"sys");c.permanent=card;calculateAura(c);}
 function markSpellFlags(entry){const c=G.players[entry.casterIdx];const isET=G.activeIdx!==entry.casterIdx;if(entry.card.type==="spell"){c.flags.spellCastThisTurn=true;if(c.aura.healSelfFirstSpellEachTurn&&!c.flags.firstSpellBonusUsed){heal(c,c.aura.healSelfFirstSpellEachTurn,null);c.flags.firstSpellBonusUsed=true;}}if(entry.card.type==="quick"&&isET&&c.aura.healSelfFirstQuickOnEnemyTurn&&!c.flags.firstQuickOnEnemyTurnUsed){heal(c,c.aura.healSelfFirstQuickOnEnemyTurn,null);c.flags.firstQuickOnEnemyTurnUsed=true;}}
 
@@ -215,18 +401,23 @@ function applyEffects(entry){const c=G.players[entry.casterIdx],e=G.players[othe
 
 async function resolveStack(){while(G.stack.length&&!G.over){const entry=G.stack.pop();if(entry.canceled){entry.owner.discard.push(entry.card);log(`✖ ${entry.card.name} cancelada.`,"sys");continue;}showResolvingCard(entry.card);await wait(220);if(isCounterCard(entry.card)){const t=findCounterTarget();if(t&&counterMatches(entry.card,t,entry.casterIdx)){t.canceled=true;log(`⛔ ${entry.card.name} cancela ${t.card.name}.`,"react");if(hasCounterEffect(entry.card,"draw_both_if_target_was_quick")&&t.card.type==="quick"){drawCard(G.players[0],1,"Cierre",false);drawCard(G.players[1],1,"Cierre",false);}}else log(`… ${entry.card.name} sin objetivo.`,"sys");entry.owner.discard.push(entry.card);continue;}if(entry.card.type==="perm"){applyPermanent(entry.owner,entry.card);continue;}applyEffects(entry);entry.owner.discard.push(entry.card);}}
 
-/* ═══ AI ═══ */
+/* ═══════════════ AI ═══════════════ */
 function estimateIncomingDamage(te,ri){if(!te||te.casterIdx===ri)return 0;const c=G.players[te.casterIdx];let t=0;for(const fx of te.card.effects){if(fx.action==="damage_enemy")t+=fx.value+(te.card.type==="spell"?c.aura.buffSelfSpellDamage:0);if(fx.action==="damage_enemy_if_self_desperation"&&isDesperate(c))t+=fx.value;if(fx.action==="damage_enemy_if_self_has_permanent"&&c.permanent)t+=fx.value;if(fx.action==="damage_enemy_if_enemy_cast_spell_this_turn"&&G.players[ri].flags.spellCastThisTurn)t+=fx.value;}return t;}
 function cardHeuristic(p,card){if(!canAfford(p,card))return-999;let s=0;for(const fx of card.effects){switch(fx.action){case "damage_enemy":s+=fx.value*2.4;break;case "heal_self":s+=p.hp<16?fx.value*2.2:fx.value*1.1;break;case "draw_self":s+=p.hand.length<4?fx.value*2.8:fx.value*1.2;break;case "discard_random_enemy":s+=currentOpponent().hand.length>0?fx.value*2:0;break;case "shield_self":s+=p.hp<12?fx.value*2:fx.value;break;case "damage_enemy_if_self_desperation":if(isDesperate(p))s+=fx.value*1.8;break;case "damage_enemy_if_self_has_permanent":if(p.permanent)s+=fx.value*1.6;break;}}if(card.type==="perm"&&!p.permanent)s+=5;if(card.type==="perm"&&p.permanent)s+=1.5;return s;}
 function aiChooseReaction(ri){const r=G.players[ri],te=G.stack[G.stack.length-1];if(!te)return null;const cands=r.hand.filter(c=>c.type==="quick"&&canAfford(r,c)).sort((a,b)=>cardHeuristic(r,b)-cardHeuristic(r,a));if(!cands.length)return null;const inc=estimateIncomingDamage(te,ri);if(inc>=r.hp||inc>=6){const ct=cands.find(c=>isCounterCard(c));if(ct)return ct;const sh=cands.find(c=>c.effects.some(fx=>fx.action==="shield_self"));if(sh)return sh;}if(Math.random()<0.28&&r.hp>9)return cands.find(c=>c.effects.some(fx=>fx.action==="damage_enemy"))||null;return null;}
 
-/* ═══ REACTION ═══ */
-async function handleReactionLoop(nri){G.reaction={active:true,reactorIdx:nri,passes:0};while(G.reaction.active&&!G.over){const reactor=G.players[G.reaction.reactorIdx];if(reactor.human){G.phase="reaction";log("⚡ Ventana de reacción.","react");render();await new Promise(r=>{humanReactionResolver=r;});if(G.reaction.passes>=2)break;}else{const rc=aiChooseReaction(G.reaction.reactorIdx);if(rc){removeCardFromHand(reactor,rc);const paid=effectiveCost(reactor,rc);reactor.hp-=paid;log(`⚡ ${reactor.name} reacciona con ${rc.name} (−${paid} HP).`,"react");showReactionBanner(`${reactor.name}: ${rc.name}`);if(reactor.hp<=0){G.over=true;G.winnerIdx=otherIndex(G.reaction.reactorIdx);break;}G.stack.push({card:rc,owner:reactor,casterIdx:G.reaction.reactorIdx,canceled:false});G.reaction.passes=0;G.reaction.reactorIdx=otherIndex(G.reaction.reactorIdx);render();await wait(260);}else{G.reaction.passes++;if(G.reaction.passes>=2)break;G.reaction.reactorIdx=otherIndex(G.reaction.reactorIdx);render();await wait(140);}}}G.reaction.active=false;humanReactionResolver=null;}
+/* ═══════════════ REACTION ═══════════════ */
+async function handleReactionLoop(nri){G.reaction={active:true,reactorIdx:nri,passes:0};while(G.reaction.active&&!G.over){const reactor=G.players[G.reaction.reactorIdx];if(reactor.human){G.phase="reaction";log("⚡ Ventana de reacción.","react");render();await new Promise(r=>{humanReactionResolver=r;});if(G.reaction.passes>=2)break;}else{
+    // AI thinking delay for reactions
+    showAiThinking(reactor.name);
+    await wait(500 + rand(400));
+    hideAiThinking();
+    const rc=aiChooseReaction(G.reaction.reactorIdx);if(rc){removeCardFromHand(reactor,rc);const paid=effectiveCost(reactor,rc);reactor.hp-=paid;log(`⚡ ${reactor.name} reacciona con ${rc.name} (−${paid} HP).`,"react");showReactionBanner(`${reactor.name}: ${rc.name}`);if(reactor.hp<=0){G.over=true;G.winnerIdx=otherIndex(G.reaction.reactorIdx);break;}G.stack.push({card:rc,owner:reactor,casterIdx:G.reaction.reactorIdx,canceled:false});G.reaction.passes=0;G.reaction.reactorIdx=otherIndex(G.reaction.reactorIdx);render();await wait(260);}else{G.reaction.passes++;if(G.reaction.passes>=2)break;G.reaction.reactorIdx=otherIndex(G.reaction.reactorIdx);render();await wait(140);}}}G.reaction.active=false;humanReactionResolver=null;}
 
-/* ═══ CAST ═══ */
+/* ═══════════════ CAST ═══════════════ */
 async function castCard(ci,card){const c=G.players[ci];removeCardFromHand(c,card);const paid=effectiveCost(c,card);c.hp-=paid;log(`▶ ${c.name} juega ${card.name} (−${paid} HP).`,"sys");await showCastCinematic(card);if(c.hp<=0){G.over=true;G.winnerIdx=otherIndex(ci);return;}G.stack.push({card,owner:c,casterIdx:ci,canceled:false});await handleReactionLoop(otherIndex(ci));if(!G.over)await resolveStack();}
 
-/* ═══ TURNS ═══ */
+/* ═══════════════ TURNS ═══════════════ */
 function resetTurnFlags(){for(const p of G.players){p.shield=0;p.flags.firstSpellBonusUsed=false;p.flags.firstQuickOnEnemyTurnUsed=false;p.flags.spellDamagePreventUsed=false;p.flags.preventDiscardUsed=false;p.flags.spellCastThisTurn=false;calculateAura(p);}}
 function startOfTurnEffects(p){if(p.aura.startOfTurnDamageSelf)damage(p,p.aura.startOfTurnDamageSelf,opponentOf(G.players.indexOf(p)),p.permanent,false);if(!G.over&&p.aura.startOfTurnDrawSelf)drawCard(p,p.aura.startOfTurnDrawSelf,"inicio",false);}
 function endOfTurnEffects(p){if(!G.over&&p.flags.spellCastThisTurn&&p.aura.endOfTurnDamageEnemyIfSelfCastSpell){log(`🌙 Efecto de fin de turno.`,"sys");damage(opponentOf(G.players.indexOf(p)),p.aura.endOfTurnDamageEnemyIfSelfCastSpell,p,p.permanent);}}
@@ -245,9 +436,37 @@ async function beginTurn(){
 
 async function endCurrentTurn(){if(G.over){render();showGameover();return;}endOfTurnEffects(currentPlayer());if(G.over){render();showGameover();return;}G.activeIdx=otherIndex(G.activeIdx);await beginTurn();}
 
-async function runAiTurn(){const ai=G.players[G.activeIdx];const objs=ai.hand.filter(c=>(c.type==="perm"||c.type==="consumable")&&canAfford(ai,c)).sort((a,b)=>cardHeuristic(ai,b)-cardHeuristic(ai,a));let op=0;for(const card of objs){if(G.over||op>=2)break;if(cardHeuristic(ai,card)<2)continue;await castCard(G.activeIdx,card);op++;render();await wait(250);}if(!G.over&&G.canNormalSpellThisTurn){const sp=ai.hand.filter(c=>c.type==="spell"&&canAfford(ai,c)).sort((a,b)=>cardHeuristic(ai,b)-cardHeuristic(ai,a))[0];if(sp){await castCard(G.activeIdx,sp);ai.flags.spellCastThisTurn=true;render();await wait(300);}else log(`… ${ai.name} no lanza hechizo.`,"sys");}if(!G.over)await endCurrentTurn();}
+async function runAiTurn(){
+    const ai=G.players[G.activeIdx];
 
-/* ═══ PLAYER INPUT ═══ */
+    // AI thinking delay — makes it feel like a real opponent
+    showAiThinking(ai.name);
+    await wait(800 + rand(600));
+    hideAiThinking();
+
+    const objs=ai.hand.filter(c=>(c.type==="perm"||c.type==="consumable")&&canAfford(ai,c)).sort((a,b)=>cardHeuristic(ai,b)-cardHeuristic(ai,a));let op=0;
+    for(const card of objs){
+        if(G.over||op>=2)break;if(cardHeuristic(ai,card)<2)continue;
+        await castCard(G.activeIdx,card);op++;render();
+        // Pause between AI actions
+        showAiThinking(ai.name);
+        await wait(500 + rand(400));
+        hideAiThinking();
+    }
+    if(!G.over&&G.canNormalSpellThisTurn){
+        // Think before spell
+        showAiThinking(ai.name);
+        await wait(600 + rand(500));
+        hideAiThinking();
+
+        const sp=ai.hand.filter(c=>c.type==="spell"&&canAfford(ai,c)).sort((a,b)=>cardHeuristic(ai,b)-cardHeuristic(ai,a))[0];
+        if(sp){await castCard(G.activeIdx,sp);ai.flags.spellCastThisTurn=true;render();await wait(300);}
+        else log(`… ${ai.name} no lanza hechizo.`,"sys");
+    }
+    if(!G.over)await endCurrentTurn();
+}
+
+/* ═══════════════ PLAYER INPUT ═══════════════ */
 function canPlaySelectedCard(card){if(!G||G.over)return false;const p=G.players[0];if(G.activeIdx!==0&&G.phase!=="reaction")return false;if(G.phase==="reaction")return G.reaction?.active&&G.reaction.reactorIdx===0&&card.type==="quick"&&canAfford(p,card);if(G.phase==="objects")return(card.type==="perm"||card.type==="consumable")&&canAfford(p,card);if(G.phase==="spell")return!G.playerSpellPlayed&&card.type==="spell"&&canAfford(p,card);return false;}
 
 async function onPlayCard(){
@@ -262,17 +481,32 @@ function onPassReaction(){if(!G||G.over||G.phase!=="reaction"||!G.reaction?.acti
 async function onToSpellPhase(){if(!G||G.over||G.activeIdx!==0||G.phase!=="objects"){shakeEl("btnToSpell");return;}selectedHandIndex=null;hideCardPopup();if(G.canNormalSpellThisTurn){await showPhaseBanner("✨","Fase de Hechizo","Lanza un hechizo",700);G.phase="spell";}else G.phase="end";render();}
 async function onEndTurn(){if(!G||G.over||G.activeIdx!==0||G.phase==="reaction"){shakeEl("btnEndTurn");return;}hideCardPopup();await endCurrentTurn();render();}
 
-/* ═══ GAME START ═══ */
+/* ═══════════════ GAME START ═══════════════ */
 async function startNewGame(auto=false){
     G={players:[createPlayer(AVATARS.player.name,!auto),createPlayer(AVATARS.enemy.name,false)],activeIdx:0,firstIdx:rand(2),turn:0,phase:"idle",stack:[],logs:[],over:false,winnerIdx:null,canNormalSpellThisTurn:true,playerSpellPlayed:false,reaction:null,startedAt:Date.now()};
     if(auto){G.players[0].human=false;G.players[1].human=false;}selectedHandIndex=null;humanReactionResolver=null;hideCardPopup();
     for(const p of G.players){drawCard(p,INITIAL_HAND,"mano inicial",false);performMulligan(p);calculateAura(p);}
     G.activeIdx=G.firstIdx;log(`═══ Nueva partida ═══`,"sys");log(`${G.players[G.firstIdx].name} comienza.`,"sys");
+
+    // Show tutorial on first ever game
+    if (!tutorialShown && !auto) {
+        showTutorial();
+        await new Promise(resolve => {
+            const check = setInterval(() => {
+                if (tutorialShown || !$("tutorialOverlay").classList.contains("on")) {
+                    clearInterval(check);
+                    tutorialShown = true;
+                    resolve();
+                }
+            }, 100);
+        });
+    }
+
     render();await showPhaseBanner("⚔️","¡Duelo de Magos!","Que comience la batalla",1200);await beginTurn();
 }
-async function autoBattle(){await startNewGame(true);let g=0;while(!G.over&&g<MAX_TURNS){await wait(60);g++;}render();if(G.over)showGameover();}
+async function autoBattle(){tutorialShown=true;await startNewGame(true);let g=0;while(!G.over&&g<MAX_TURNS){await wait(60);g++;}render();if(G.over)showGameover();}
 
-/* ═══ RENDER ═══ */
+/* ═══════════════ RENDER ═══════════════ */
 function renderHp(prefix,player){$(`${prefix}HpText`).innerHTML=`${player.hp} <span>/ ${MAX_HP}</span>`;const bar=$(`${prefix}HpBar`);bar.style.width=`${Math.max(0,(player.hp/MAX_HP)*100)}%`;bar.className="hp-fill";if(player.hp<=DESP_THRESHOLD)bar.classList.add("desp");else if(player.hp<=10)bar.classList.add("low");else if(player.hp<=18)bar.classList.add("mid");$(`${prefix}DesperationTag`).classList.toggle("on",player.hp<=DESP_THRESHOLD);$(`${prefix==="player"?"playerZone":"enemyZone"}`).classList.toggle("desp-glow",player.hp<=DESP_THRESHOLD);}
 function renderObject(prefix,player){const slot=$(`${prefix}ObjectSlot`);if(player.permanent){slot.className="obj-slot filled";let art=player.permanent.art;if(player.permanent.art_url)art=`<img src="${player.permanent.art_url}" style="width:24px;height:24px;border-radius:4px;object-fit:cover">`;slot.innerHTML=`<div class="obj-slot-name">${art} ${player.permanent.name}</div><div class="obj-cost">${player.permanent.cost}HP</div>`;}else{slot.className="obj-slot";slot.innerHTML=`<span class="obj-slot-empty">⬡</span>`;}}
 function renderEnemyBackHand(){const c=$("enemyHandBacks");c.innerHTML="";if(!G)return;for(let i=0;i<Math.min(G.players[1].hand.length,6);i++){const d=document.createElement("div");d.className="card back";d.style.width="22px";d.innerHTML=`<div class="ci" style="height:32px;display:flex;align-items:center;justify-content:center"><span style="font-size:12px;opacity:.18">✦</span></div>`;c.appendChild(d);}}
@@ -283,21 +517,24 @@ function renderHand(){
     player.hand.forEach((card,index)=>{
         const playable=canPlaySelectedCard(card);const typeClass=card.type;const effCost=effectiveCost(player,card);const isSel=selectedHandIndex===index;
         const el=document.createElement("div");
-        el.className=`card ${typeClass} ${isSel?"selected":""} ${!playable?"unplayable":""} ${desp&&effCost<card.cost?"desp-mode":""}`;
+        el.className=`card ${typeClass} ${isSel?"selected":""} ${!playable?"unplayable":""} ${desp&&effCost<card.cost?"desp-mode":""} ${playable&&!isSel?"playable-glow":""}`;
         el.style.animationDelay=`${index*60}ms`;
         const artContent=card.art_url?`<img src="${card.art_url}" alt="${card.name}" onerror="this.style.display='none';this.nextSibling.style.display='block'" style="width:100%;height:100%;object-fit:cover"><span style="display:none;font-size:28px;text-align:center;width:100%">${card.art}</span>`:`<span>${card.art}</span>`;
         el.innerHTML=`<div class="ci"><div class="c-cost ${effCost<=2?"cheap":""}">${effCost}</div><div class="c-tbadge">${labelForType(card.type)}</div><div class="c-art">${artContent}</div><div class="c-foot"><div class="c-name">${card.name}</div><div class="c-fx">${card.text}</div></div><div class="c-desp-disc">½</div></div>`;
         el.addEventListener("click",()=>{
             if(selectedHandIndex===index){selectedHandIndex=null;hideCardPopup();}
-            else{selectedHandIndex=index;render();/* show popup after render so el is in DOM */setTimeout(()=>{const cardEl=container.children[index];if(cardEl)showCardPopup(cardEl,card,playable);},20);}
+            else{selectedHandIndex=index;render();setTimeout(()=>{const cardEl=container.children[index];if(cardEl)showCardPopup(cardEl,card,playable);},20);}
             render();
         });
         container.appendChild(el);
     });
+    // Update hand count
+    const countEl = $("handCount");
+    if (countEl) countEl.textContent = `${player.hand.length} carta${player.hand.length !== 1 ? "s" : ""}`;
 }
 
 function renderPhase(){
-    if(!G){$("turnText").textContent="—";$("phasePill").textContent="Sin partida";$("reactionHint").textContent="";return;}
+    if(!G){$("turnText").textContent="—";$("phasePill").textContent="Sin partida";$("reactionHint").textContent="";$("phaseGuide").innerHTML="";return;}
     const pn={idle:"Preparando",objects:"Fase objetos",spell:"Fase hechizo",end:"Fin de turno",reaction:"Reacción",enemy_turn:"Turno rival"};
     $("turnText").textContent=G.over?`Ganador: ${G.players[G.winnerIdx].name}`:G.players[G.activeIdx].name;
     $("phasePill").textContent=G.over?"Fin de partida":(pn[G.phase]||G.phase);
@@ -305,12 +542,20 @@ function renderPhase(){
     $("playerZone").classList.toggle("active",G.activeIdx===0&&!G.over);
     $("enemyZone").classList.toggle("active",G.activeIdx===1&&!G.over);
     if(G.phase==="reaction"&&G.reaction?.active)$("reactionHint").textContent=G.reaction.reactorIdx===0?"Tu ventana de reacción":"Reacción rival";else $("reactionHint").textContent="";
+
+    // Phase guide
+    const guide = $("phaseGuide");
+    const guideText = getPhaseGuideText();
+    guide.innerHTML = guideText;
+    guide.classList.toggle("highlight", G.activeIdx === 0 && !G.over && G.phase !== "enemy_turn");
 }
+
 function renderBattlefieldButtons(){
     if(!G){$("btnToSpell").disabled=true;$("btnEndTurn").disabled=true;$("btnPassReaction").disabled=true;return;}
     $("btnToSpell").disabled=!(G.activeIdx===0&&!G.over&&G.phase==="objects");
     $("btnEndTurn").disabled=!(G.activeIdx===0&&!G.over&&G.phase!=="reaction");
     $("btnPassReaction").disabled=!(G.phase==="reaction"&&G.reaction?.active&&G.reaction.reactorIdx===0);
+    // Show only relevant buttons
     $("btnToSpell").style.display=(G.phase==="objects"&&G.activeIdx===0&&!G.over)?"":"none";
     $("btnEndTurn").style.display=(G.activeIdx===0&&!G.over&&G.phase!=="reaction")?"":"none";
     $("btnPassReaction").style.display=(G.phase==="reaction"&&G.reaction?.active&&G.reaction.reactorIdx===0)?"":"none";
@@ -330,18 +575,18 @@ function render(){
     if(G.over)showGameover();
 }
 
-/* ═══ MODALS ═══ */
-function showGameover(){if(!G||!G.over)return;const w=G.players[G.winnerIdx],y=G.winnerIdx===0;$("gameoverTitle").textContent=y?"¡Victoria!":"Derrota";$("gameoverTitle").style.color=y?"var(--gold2)":"var(--red3)";$("gameoverSub").textContent=y?`Has derrotado a ${G.players[1].name}`:`${G.players[1].name} te ha vencido`;$("gameoverStats").innerHTML=`Turnos: ${G.turn}<br>Ganador: ${w.name}<br>Tu vida: ${G.players[0].hp} HP<br>Duración: ${Math.round((Date.now()-G.startedAt)/1000)}s`;$("gameoverOverlay").classList.add("on");}
+/* ═══════════════ MODALS ═══════════════ */
+function showGameover(){if(!G||!G.over)return;const w=G.players[G.winnerIdx],y=G.winnerIdx===0;$("gameoverTitle").textContent=y?"¡Victoria!":"Derrota";$("gameoverTitle").style.color=y?"var(--gold2)":"var(--red3)";$("gameoverSub").textContent=y?`Has derrotado a ${G.players[1].name}`:`${G.players[1].name} te ha vencido`;$("gameoverStats").innerHTML=`Turnos: ${G.turn}<br>Ganador: ${w.name}<br>Tu vida: ${G.players[0].hp} HP<br>Duración: ${Math.round((Date.now()-G.startedAt)/1000)}s`;$("gameoverOverlay").classList.add("on");hideAiThinking();}
 function hideGameover(){$("gameoverOverlay").classList.remove("on");}
 function openRules(){$("rulesOverlay").classList.add("on");}
 function closeRules(){$("rulesOverlay").classList.remove("on");}
 function openLog(){$("logOverlay").classList.add("on");if(G)renderLog();}
 function closeLog(){$("logOverlay").classList.remove("on");}
 
-/* ═══ BACKGROUND ═══ */
+/* ═══════════════ BACKGROUND ═══════════════ */
 function initBackground(){const cosmos=$("cosmos");cosmos.innerHTML="";for(let i=0;i<80;i++){const s=document.createElement("div");s.className="star";const sz=Math.random()*1.8+0.4;s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;animation-duration:${Math.random()*4+2}s;animation-delay:${Math.random()*5}s;opacity:${Math.random()*0.6+0.1};`;cosmos.appendChild(s);}const runes=["✦","✧","⬡","◈","⟡","⌬","⊕"];for(let i=0;i<10;i++){const r=document.createElement("div");r.className="rune-bg";r.textContent=runes[rand(runes.length)];r.style.cssText=`left:${Math.random()*100}%;font-size:${rand(50)+30}px;animation-duration:${rand(14)+12}s;animation-delay:${rand(10)}s;`;cosmos.appendChild(r);}}
 
-/* ═══ INIT ═══ */
+/* ═══════════════ INIT ═══════════════ */
 async function loadCards(){try{const r=await fetch("cards.json");CARD_POOL=await r.json();console.log(`✅ ${CARD_POOL.length} cartas`);}catch(e){console.error(e);alert("Error al cargar cards.json");}}
 
 async function init(){
@@ -359,8 +604,13 @@ async function init(){
     $("btnCloseLog").addEventListener("click",closeLog);
     $("logOverlay").addEventListener("click",e=>{if(e.target===$("logOverlay"))closeLog();});
     $("cardPopupClose").addEventListener("click",()=>{hideCardPopup();selectedHandIndex=null;render();});
-    // Close popup when clicking outside
     document.addEventListener("click",e=>{const popup=$("cardPopup");if(popup.classList.contains("show")&&!popup.contains(e.target)&&!e.target.closest(".card")){hideCardPopup();selectedHandIndex=null;render();}});
+
+    // Tutorial controls
+    $("tutorialNext").addEventListener("click", tutorialNext);
+    $("tutorialPrev").addEventListener("click", tutorialPrev);
+    $("tutorialSkip").addEventListener("click", closeTutorial);
+
     setupNameEditing("playerName","playerNameInput","player");
     setupNameEditing("enemyName","enemyNameInput","enemy");
     initBackground();render();
