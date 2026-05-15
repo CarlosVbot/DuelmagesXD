@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ruinas del Abismo</title>
+    <link rel="stylesheet" href="./Styles/Styles.css" />
+</head>
+<body>
+
+<!-- ========== CRT SCANLINE OVERLAY ========== -->
+<div id="crt-overlay"></div>
+
+<!-- ========== BOOT SEQUENCE (estilo cartucho SNES) ========== -->
+<div id="boot-screen">
+    <p class="boot-licensed">Licensed by</p>
+
+    <div class="boot-logo-container">
+        <span class="boot-logo-text">RADIMEME</span>
+        <span class="boot-logo-sub">Studios</span>
+    </div>
+
+    <p class="boot-tm">© 2026 Radimeme Entertainment</p>
+</div>
+
+<!-- ========== MAIN MENU ========== -->
+<div id="menu-screen">
+
+    <!-- Título del juego -->
+    <div class="menu-title-wrap">
+        <h1 class="menu-title">RUINAS DEL ABISMO</h1>
+        <p class="menu-subtitle">La oscuridad aguarda</p>
+        <div class="menu-divider"></div>
+    </div>
+
+    <!-- Opciones del menú -->
+    <ul class="menu-list">
+        <li class="menu-item" data-action="new-game">Nueva Partida</li>
+
+    </ul>
+
+    <!-- Prompt inferior -->
+    <p class="press-start">Presiona Enter</p>
+
+    <!-- Versión -->
+    <span class="version-tag">v0.1.0</span>
+</div>
+
+<script src="./Scripts/Script_index.js"></script>
+</body>
+</html>

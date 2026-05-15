@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Runas del Abismo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================================
+           SNES PALETTE & VARIABLES
+           Colores sacados del estilo Super Famicom / SNES RPGs
+           ============================================================ */
+        :root {
+            --snes-black: #0f0c1a;
+            --snes-dark: #1a1430;
+            --snes-mid: #2a2248;
+            --snes-panel: #1e1838;
+            --snes-panel-light: #2e2650;
+            --snes-gold: #d4a824;
+            --snes-gold-light: #f0cc40;
+            --snes-gold-dark: #8a6c10;
+            --snes-border: #6858a0;
+            --snes-border-light: #9888d0;
+            --snes-hp: #d83030;
+            --snes-hp-bg: #481818;
+            --snes-mp: #3060d8;
+            --snes-mp-bg: #182048;
+            --snes-fire: #e83820;
+            --snes-fire-bg: #401008;
+            --snes-water: #2888e8;
+            --snes-water-bg: #081840;
+            --snes-earth: #30a838;
+            --snes-earth-bg: #083010;
+            --snes-wind: #a078e0;
+            --snes-wind-bg: #201040;
+            --snes-arcane: #e8c020;
+            --snes-arcane-bg: #382800;
+            --snes-white: #e8e0d0;
+            --snes-gray: #8880a0;
+            --snes-text-crit: #f8f040;
+            --snes-text-heal: #40e878;
+            --snes-text-dmg: #f85848;
+            --px: 'Press Start 2P', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            color: var(--snes-white);
+            font-family: var(--px);
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            image-rendering: pixelated;
+        }
+
+        /* ============================================================
+           GAME CONTAINER — SNES 4:3 feel
+           ============================================================ */
+        #game {
+            width: 100%;
+            max-width: 900px;
+            height: 100vh;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            background: var(--snes-black);
+            /* Scanline overlay */
+            background-image: repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0,0,0,0.15) 2px,
+                    rgba(0,0,0,0.15) 4px
+            );
+        }
+
+        /* ============================================================
+           PIXEL BORDER MIXIN (SNES-style double border)
+           ============================================================ */
+        .snes-box {
+            border: 3px solid var(--snes-border-light);
+            outline: 2px solid var(--snes-black);
+            outline-offset: 0px;
+            box-shadow: inset 0 0 0 1px var(--snes-border);
+            background: var(--snes-panel);
+        }
+
+        /* ============================================================
+           BATTLE BACKGROUND — Dungeon Scene
+           ============================================================ */
+        #battle-bg {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 0;
+            background-image: url('./assets/fondo.png');
+            background-size: cover;
+            background-position: center bottom;
+            background-repeat: no-repeat;
+        }
+        /* Suelo de piedra */
+        #battle-bg::before {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 42%;
+            background:
+                    repeating-linear-gradient(
+                            90deg,
+                            transparent 0px, transparent 46px,
+                            rgba(80,60,120,0.1) 46px, rgba(80,60,120,0.1) 48px
+                    ),
+                    repeating-linear-gradient(
+                            0deg,
+                            transparent 0px, transparent 22px,
+                            rgba(80,60,120,0.08) 22px, rgba(80,60,120,0.08) 24px
+                    ),
+                    linear-gradient(to top, #0a0610 0%, #181030 40%, transparent 100%);
+        }
+        /* Antorchas decorativas */
+        #battle-bg::after {
+            content: '🕯️                                        🕯️';
+            position: absolute;
+            top: 12%;
+            left: 0; right: 0;
+            text-align: center;
+            font-size: 20px;
+            opacity: 0.6;
+            animation: torch-flicker 2s ease-in-out infinite alternate;
+            letter-spacing: 0;
+        }
+        @keyframes torch-flicker {
+            0% { opacity: 0.4; filter: brightness(0.8); }
+            50% { opacity: 0.7; filter: brightness(1.2); }
+            100% { opacity: 0.5; filter: brightness(1); }
+        }
+
+        /* Vignette SNES CRT effect */
+        #game::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 999;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%);
+        }
+
+        /* ============================================================
+           TOP HUD — SNES RPG Style
+           ============================================================ */
+        #top-hud {
+            position: relative;
+            z-index: 10;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            padding: 4px 6px;
+            gap: 6px;
+            background: linear-gradient(to bottom, rgba(10,8,20,0.95), rgba(10,8,20,0.8));
+            border-bottom: 3px solid var(--snes-border);
+        }
+
+        /* --- Player HUD --- */
+        .player-hud {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+        }
+        .player-portrait {
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            background-image: url('./assets/retrato.png');
+            background-size: cover;
+            background-position: center;
+            font-size: 0;
+
+        }
+        .player-portrait.snes-box { padding: 0; }
+        .player-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 2px;
+        }
+        .player-name {
+            font-size: 8px;
+            color: var(--snes-gold-light);
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+
+        /* HP / MP bars — pixel style */
+        .stat-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .stat-lbl {
+            font-size: 7px;
+            width: 20px;
+            flex-shrink: 0;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .snes-bar {
+            width: 100px;
+            height: 10px;
+            background: var(--snes-hp-bg);
+            border: 2px solid var(--snes-border);
+            position: relative;
+            overflow: hidden;
+        }
+        .snes-bar-fill {
+            height: 100%;
+            transition: width 0.4s;
+            image-rendering: pixelated;
+        }
+        .snes-bar-fill.hp {
+            background: repeating-linear-gradient(90deg, var(--snes-hp) 0px, var(--snes-hp) 3px, #f04040 3px, #f04040 4px);
+        }
+        .snes-bar-fill.mp {
+            background: repeating-linear-gradient(90deg, var(--snes-mp) 0px, var(--snes-mp) 3px, #4070f0 3px, #4070f0 4px);
+        }
+        .stat-num {
+            font-size: 6px;
+            color: var(--snes-gray);
+            width: 48px;
+            text-align: right;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+
+        /* --- Floor Indicator --- */
+        .floor-box {
+            align-self: center;
+            text-align: center;
+            padding: 6px 14px;
+        }
+        .floor-txt {
+            font-size: 7px;
+            color: var(--snes-gray);
+            letter-spacing: 0.5px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .floor-num {
+            font-size: 9px;
+            color: var(--snes-gold-light);
+            text-shadow: 1px 1px 0 var(--snes-gold-dark);
+        }
+        .turn-txt {
+            font-size: 6px;
+            color: var(--snes-gray);
+            margin-top: 3px;
+        }
+
+        /* --- Enemy HUD --- */
+        .enemy-hud {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 3px;
+            padding-top: 2px;
+        }
+        .enemy-name {
+            font-size: 8px;
+            color: var(--snes-white);
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .weak-row {
+            font-size: 7px;
+            color: var(--snes-gray);
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .enemy-effects-row {
+            display: flex;
+            gap: 3px;
+            justify-content: flex-end;
+            margin-top: 1px;
+        }
+        .eff-pip {
+            background: var(--snes-dark);
+            border: 1px solid var(--snes-border);
+            padding: 1px 4px;
+            font-size: 7px;
+        }
+
+        /* ============================================================
+           BATTLE AREA
+           ============================================================ */
+        #battle-area {
+            position: relative;
+            z-index: 5;
+            flex: 1;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 0 16px 10px;
+            min-height: 0;
+            gap: 0;
+        }
+
+        /* --- Ground platform (SNES floor tiles) --- */
+        #battle-area::before {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 22%;
+            z-index: 0;
+            background:
+                    repeating-linear-gradient(
+                            90deg,
+                            rgba(100,80,160,0.1) 0px,
+                            rgba(100,80,160,0.1) 2px,
+                            transparent 2px,
+                            transparent 32px
+                    ),
+                    repeating-linear-gradient(
+                            0deg,
+                            rgba(100,80,160,0.08) 0px,
+                            rgba(100,80,160,0.08) 2px,
+                            transparent 2px,
+                            transparent 32px
+                    ),
+                    linear-gradient(to top, #120e22, #1a1434, transparent);
+        }
+
+        /* Sprite area layout */
+        .battle-field {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+            z-index: 2;
+            padding-bottom: 10px;
+        }
+
+        .sprite-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sprite-char {
+            font-size: 72px;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.8));
+            transition: transform 0.3s;
+            position: relative;
+            line-height: 1;
+        }
+        .sprite-char.player {
+            animation: snes-idle 1.5s steps(2) infinite;
+            width: 180px;
+            height: 240px;
+            background-image: url('./assets/maga.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center bottom;
+            font-size: 0;
+        }
+        .sprite-char.enemy  { animation: snes-idle-enemy 2s steps(2) infinite; }
+        .sprite-char.shake  { animation: snes-hit 0.3s steps(4) !important; }
+
+        /* SNES-style stepped animations */
+        @keyframes snes-idle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        @keyframes snes-idle-enemy {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        @keyframes snes-hit {
+            0%   { transform: translateX(0); filter: brightness(3); }
+            25%  { transform: translateX(-8px); filter: brightness(1); }
+            50%  { transform: translateX(8px); filter: brightness(3); }
+            75%  { transform: translateX(-4px); filter: brightness(1); }
+            100% { transform: translateX(0); filter: brightness(1); }
+        }
+
+        /* Shadow under sprites */
+        .sprite-shadow {
+            width: 60px;
+            height: 10px;
+            background: radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%);
+            margin-top: -4px;
+        }
+
+        /* Intention bubble */
+        .intent-bubble {
+            background: var(--snes-panel);
+            border: 2px solid var(--snes-border);
+            padding: 3px 8px;
+            font-size: 7px;
+            color: var(--snes-gray);
+            text-shadow: 1px 1px 0 var(--snes-black);
+            position: relative;
+            text-align: center;
+        }
+        .intent-bubble::after {
+            content: '';
+            position: absolute;
+            top: -6px; left: 50%;
+            transform: translateX(-50%);
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 6px solid var(--snes-border);
+        }
+
+        /* Player buffs */
+        .buffs-row {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .buff-pip {
+            background: var(--snes-dark);
+            border: 2px solid var(--snes-border);
+            padding: 2px 5px;
+            font-size: 7px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+
+        /* Potion button */
+        .potion-zone {
+            position: absolute;
+            left: 10px;
+            bottom: 20%;
+            z-index: 15;
+        }
+        .potion-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 5px;
+            cursor: pointer;
+            font-family: var(--px);
+            /* =============================================
+               🎨 SPRITE: ÍCONO DE POCIÓN
+
+               .potion-icon puede reemplazarse con:
+                 background-image: url('assets/potion.png');
+                 background-size: contain;
+                 width: 24px; height: 24px;
+                 font-size: 0;
+               ============================================= */
+        }
+        .potion-btn.snes-box { background: var(--snes-panel); }
+        .potion-icon { font-size: 18px; }
+        .potion-num { font-size: 6px; color: var(--snes-white); text-shadow: 1px 1px 0 var(--snes-black); }
+        .potion-btn:disabled { opacity: 0.3; cursor: default; }
+
+        /* End turn button — SNES menu style */
+        .end-turn-zone {
+            position: absolute;
+            right: 10px;
+            bottom: 20%;
+            z-index: 15;
+        }
+        .end-turn-btn {
+            cursor: pointer;
+            font-family: var(--px);
+            font-size: 7px;
+            color: var(--snes-white);
+            padding: 10px 8px;
+            text-align: center;
+            line-height: 1.8;
+            text-shadow: 1px 1px 0 var(--snes-black);
+            transition: all 0.1s;
+        }
+        .end-turn-btn.snes-box {
+            background: var(--snes-mid);
+            border-color: var(--snes-gold);
+            box-shadow: inset 0 0 0 1px var(--snes-gold-dark);
+        }
+        .end-turn-btn:hover {
+            background: var(--snes-panel-light);
+            color: var(--snes-gold-light);
+        }
+        .end-turn-btn:active { transform: scale(0.95); }
+
+        /* Damage popup */
+        .dmg-pop {
+            position: absolute;
+            font-family: var(--px);
+            font-size: 16px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: pop-up 0.9s steps(6) forwards;
+            z-index: 50;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
+        }
+        @keyframes pop-up {
+            0%   { opacity: 1; transform: translateY(0) scale(1); }
+            40%  { opacity: 1; transform: translateY(-28px) scale(1.4); }
+            100% { opacity: 0; transform: translateY(-56px) scale(0.7); }
+        }
+
+        /* ============================================================
+           COMBAT LOG
+           ============================================================ */
+        #combat-log {
+            position: absolute;
+            bottom: 180px;
+            left: 8px;
+            z-index: 20;
+            max-width: 220px;
+            pointer-events: none;
+        }
+        .log-line {
+            font-size: 7px;
+            padding: 1px 0;
+            animation: log-out 3.5s forwards;
+            text-shadow: 1px 1px 0 #000;
+        }
+        .log-line.atk { color: var(--snes-text-dmg); }
+        .log-line.crit { color: var(--snes-text-crit); }
+        .log-line.heal { color: var(--snes-text-heal); }
+        .log-line.sys { color: var(--snes-gray); }
+        .log-line.eff { color: #60d0e8; }
+        @keyframes log-out {
+            0%, 60% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* ============================================================
+           BOTTOM SECTION — Cards Area
+           ============================================================ */
+        #bottom-section {
+            position: relative;
+            z-index: 10;
+            border-top: 3px solid var(--snes-border);
+            background: linear-gradient(to top, var(--snes-black) 0%, var(--snes-dark) 100%);
+        }
+        .card-hint {
+            text-align: center;
+            font-size: 5px;
+            color: var(--snes-gray);
+            padding: 4px 0 2px;
+            letter-spacing: 0.5px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+
+        .cards-layout {
+            display: flex;
+            padding: 2px 6px 6px;
+            gap: 4px;
+            align-items: flex-start;
+        }
+
+        /* Left: Mana orb + Deck */
+        .side-left {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex-shrink: 0;
+            width: 48px;
+            align-items: center;
+        }
+        .mana-orb {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 3px solid var(--snes-mp);
+            background: radial-gradient(circle at 35% 35%, #4080f0, #182860);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 8px rgba(48,96,216,0.5), inset 0 -3px 6px rgba(0,0,0,0.4);
+        }
+        .mana-val { font-size: 10px; color: #fff; text-shadow: 0 0 6px rgba(100,160,255,0.8); }
+        .mana-lbl { font-size: 5px; color: #90b0e0; margin-top: 1px; }
+
+        .deck-box {
+            text-align: center;
+            padding: 4px;
+            /* =============================================
+               🎨 SPRITE: REVERSO DE CARTA / ÍCONO MAZO
+
+               background-image: url('assets/card-back.png');
+               background-size: contain;
+               ============================================= */
+        }
+        .deck-box.snes-box { background: var(--snes-panel); }
+        .deck-ico { font-size: 14px; }
+        .deck-val { font-size: 7px; color: var(--snes-white); text-shadow: 1px 1px 0 var(--snes-black); }
+        .deck-lbl { font-size: 4px; color: var(--snes-gray); }
+
+        /* Hand of cards */
+        .hand-area {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            flex: 1;
+            overflow-x: auto;
+            padding: 2px 0;
+        }
+
+        /* Individual card — SNES RPG item frame */
+        .card-snes {
+            width: 64px;
+            min-width: 56px;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 3px 2px 4px;
+            position: relative;
+        }
+        .card-snes.snes-box {
+            background: var(--snes-dark);
+        }
+        .card-snes:hover { transform: translateY(-4px); }
+        .card-snes.sel {
+            transform: translateY(-10px) !important;
+            box-shadow: 0 0 0 2px var(--snes-gold-light), 0 6px 16px rgba(240,200,64,0.3) !important;
+            border-color: var(--snes-gold-light) !important;
+        }
+        /* Element-colored top strip */
+        .card-snes.el-fire   { border-top: 4px solid var(--snes-fire); }
+        .card-snes.el-water  { border-top: 4px solid var(--snes-water); }
+        .card-snes.el-earth  { border-top: 4px solid var(--snes-earth); }
+        .card-snes.el-wind   { border-top: 4px solid var(--snes-wind); }
+        .card-snes.el-arcane { border-top: 4px solid var(--snes-arcane); }
+
+        .card-cost-pip {
+            position: absolute;
+            top: -6px;
+            right: -4px;
+            width: 16px;
+            height: 16px;
+            background: var(--snes-mp);
+            border: 2px solid #6090e0;
+            border-radius: 2px;
+            font-size: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-shadow: 1px 1px 0 #000;
+            z-index: 2;
+        }
+        .card-art-area {
+            width: 44px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin: 2px 0;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(0,0,0,0.2);
+            /* =============================================
+               🎨 SPRITE: ARTE DE CARTA ELEMENTAL
+
+               Para reemplazar el emoji por un sprite:
+                 font-size: 0;  ← oculta el emoji
+                 background-image: url('assets/card-fire.png');
+                 background-size: 36px 36px;
+                 background-repeat: no-repeat;
+                 background-position: center;
+
+               Cambia el nombre del archivo según el elemento:
+                 card-fire.png
+                 card-water.png
+                 card-earth.png
+                 card-wind.png
+                 card-arcane.png
+               ============================================= */
+        }
+        .card-title {
+            font-size: 5px;
+            color: var(--snes-white);
+            text-align: center;
+            text-shadow: 1px 1px 0 var(--snes-black);
+            margin-top: 1px;
+        }
+        .card-stat {
+            font-size: 6px;
+            color: var(--snes-gray);
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+
+        /* Right: Combos panel */
+        .side-right {
+            width: 126px;
+            flex-shrink: 0;
+        }
+        .combos-box { padding: 4px 5px; }
+        .combos-box.snes-box { background: var(--snes-panel); }
+        .combos-hdr {
+            font-size: 4px;
+            color: var(--snes-gold-light);
+            text-align: center;
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .combo-row {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 7px;
+        }
+        .combo-row:last-child { border-bottom: none; }
+        .combo-els { font-size: 9px; flex-shrink: 0; }
+        .combo-det { flex: 1; }
+        .combo-nm { font-size: 4.5px; color: var(--snes-white); text-shadow: 1px 1px 0 var(--snes-black); }
+        .combo-dv { font-size: 6px; color: var(--snes-gray); }
+        .combo-fx { font-size: 8px; flex-shrink: 0; }
+
+        /* ============================================================
+           BOTTOM BAR — SNES Menu
+           ============================================================ */
+        #bottom-bar {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            border-top: 3px solid var(--snes-gold-dark);
+            background: var(--snes-dark);
+        }
+        .bar-btn {
+            font-family: var(--px);
+            font-size: 5px;
+            color: var(--snes-gray);
+            background: var(--snes-panel);
+            border: 2px solid var(--snes-border);
+            padding: 5px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            transition: all 0.1s;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .bar-btn:hover {
+            border-color: var(--snes-gold);
+            color: var(--snes-gold-light);
+        }
+        .relic-row {
+            display: flex;
+            gap: 2px;
+            font-size: 11px;
+            /* =============================================
+               🎨 SPRITE: ÍCONOS DE RELIQUIAS
+
+               Cada reliquia puede ser un <img>:
+                 <img src="assets/relic-crystal.png" width="12" height="12">
+               ============================================= */
+        }
+
+        /* ============================================================
+           SCREENS — Menu, Reward, Game Over
+           ============================================================ */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(8,4,16,0.94);
+            padding: 20px;
+            text-align: center;
+        }
+        .overlay h1 {
+            font-size: 14px;
+            color: var(--snes-gold-light);
+            margin-bottom: 6px;
+            text-shadow: 2px 2px 0 var(--snes-gold-dark), 0 0 20px rgba(240,200,64,0.4);
+            letter-spacing: 2px;
+        }
+        .overlay h2 {
+            font-size: 8px;
+            color: var(--snes-white);
+            margin-bottom: 14px;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .overlay p {
+            font-size: 7px;
+            color: var(--snes-gray);
+            margin-bottom: 20px;
+            max-width: 320px;
+            line-height: 2;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .snes-btn {
+            font-family: var(--px);
+            font-size: 8px;
+            color: var(--snes-white);
+            padding: 12px 28px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            margin: 4px;
+            transition: all 0.1s;
+            text-shadow: 1px 1px 0 var(--snes-black);
+        }
+        .snes-btn.snes-box {
+            background: var(--snes-mid);
+        }
+        .snes-btn:hover {
+            background: var(--snes-panel-light);
+            color: var(--snes-gold-light);
+            border-color: var(--snes-gold);
+        }
+        .snes-btn:active { transform: scale(0.96); }
+        .snes-btn.green { border-color: #40c070; color: var(--snes-text-heal); }
+        .title-big {
+            font-size: 56px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 24px rgba(212,168,36,0.4));
+            animation: snes-idle 2s steps(2) infinite;
+        }
+
+        /* Guide screen */
+        .guide-box {
+            max-width: 420px;
+            text-align: left;
+            padding: 14px 18px;
+            margin: 10px 0 16px;
+            line-height: 2.2;
+        }
+        .guide-box.snes-box { background: var(--snes-dark); }
+        .guide-line {
+            font-size: 6px;
+            color: var(--snes-white);
+            text-shadow: 1px 1px 0 var(--snes-black);
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+            padding: 2px 0;
+        }
+        .guide-line .g-icon { flex-shrink: 0; font-size: 10px; width: 16px; text-align: center; }
+        .guide-line .g-txt { flex: 1; }
+        .guide-line .g-hl { color: var(--snes-gold-light); }
+        .guide-sep {
+            border: none;
+            border-top: 1px solid var(--snes-border);
+            margin: 6px 0;
+            opacity: 0.4;
+        }
+        .blink-text {
+            font-size: 7px;
+            color: var(--snes-gold-light);
+            text-shadow: 0 0 8px rgba(240,200,64,0.4), 1px 1px 0 var(--snes-gold-dark);
+            animation: snes-blink 1.2s steps(2) infinite;
+            letter-spacing: 1px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+        @keyframes snes-blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Reward cards */
+        .reward-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 8px 0;
+        }
+        .reward-opt {
+            width: 100px;
+            cursor: pointer;
+            padding: 10px 8px;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .reward-opt.snes-box { background: var(--snes-dark); }
+        .reward-opt:hover {
+            border-color: var(--snes-gold);
+            transform: translateY(-3px);
+            box-shadow: 0 0 10px rgba(212,168,36,0.3);
+        }
+        .reward-opt .rw-ico { font-size: 24px; margin-bottom: 4px; }
+        .reward-opt .rw-nm { font-size: 5px; color: var(--snes-gold-light); margin-bottom: 2px; text-shadow: 1px 1px 0 var(--snes-black); }
+        .reward-opt .rw-ds { font-size: 6px; color: var(--snes-gray); line-height: 1.6; }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 600px) {
+            .side-right { width: 100px; }
+            .card-snes { width: 54px; min-width: 48px; }
+            .card-art-area { width: 38px; height: 32px; font-size: 22px; }
+            .sprite-char { font-size: 56px; }
+            .snes-bar { width: 70px; }
+            .side-left { width: 40px; }
+            .mana-orb { width: 36px; height: 36px; }
+            .mana-val { font-size: 9px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game"></div>
+
+<script>
+    /* ================================================================
+       RUNAS DEL ABISMO v2 — Motor de Juego (SNES Edition)
+       ================================================================ */
+
+    const ELEMENTS = {
+        fire:   { name: 'FUEGO',  emoji: '🔥', cls: 'el-fire',   color: '#e83820' },
+        water:  { name: 'AGUA',   emoji: '💧', cls: 'el-water',  color: '#2888e8' },
+        earth:  { name: 'TIERRA', emoji: '🌿', cls: 'el-earth',  color: '#30a838' },
+        wind:   { name: 'VIENTO', emoji: '💨', cls: 'el-wind',   color: '#a078e0' },
+        arcane: { name: 'ARCANO', emoji: '⚡', cls: 'el-arcane', color: '#e8c020' },
+    };
+
+    const COMBOS = {
+        'fire+fire':    { name: 'Bola de Fuego',    emoji: '☄️',  dmg: 18, effect: 'burn',   desc: 'Quema 3/turno' },
+        'water+water':  { name: 'Tsunami',          emoji: '🌊',  dmg: 16, effect: 'freeze', desc: 'Congela 1 turno' },
+        'earth+earth':  { name: 'Terremoto',        emoji: '🏔️',  dmg: 17, effect: 'stun',   desc: 'Aturde 1 turno' },
+        'wind+wind':    { name: 'Tormenta',         emoji: '🌪️',  dmg: 15, effect: 'dodge',  desc: '+50% esquivar' },
+        'arcane+arcane':{ name: 'Rayo Arcano',      emoji: '✨',   dmg: 22, effect: null,     desc: 'Daño puro' },
+        'fire+wind':    { name: 'Tormenta Ígnea',   emoji: '🔥💨', dmg: 20, effect: 'burn',  desc: 'Quema' },
+        'fire+earth':   { name: 'Lava',             emoji: '🌋',  dmg: 19, effect: null,     desc: 'Daño masivo' },
+        'fire+water':   { name: 'Vapor',            emoji: '♨️',   dmg: 12, effect: 'blind',  desc: 'Ciega 2 turnos' },
+        'water+wind':   { name: 'Ventisca',         emoji: '❄️',   dmg: 16, effect: 'freeze', desc: 'Congela' },
+        'water+earth':  { name: 'Pantano',          emoji: '🐸',  dmg: 14, effect: 'slow',   desc: 'Ralentiza' },
+        'earth+wind':   { name: 'Torm. de Arena',   emoji: '🏜️',  dmg: 15, effect: 'blind',  desc: 'Ciega' },
+        'fire+arcane':  { name: 'Llama Arcana',     emoji: '💫🔥', dmg: 21, effect: 'burn',  desc: 'Quema intensa' },
+        'water+arcane': { name: 'Hielo Arcano',     emoji: '💫💧', dmg: 19, effect: 'freeze', desc: 'Congela' },
+        'earth+arcane': { name: 'Cristal',          emoji: '💎',   dmg: 18, effect: 'shield', desc: '+5 escudo' },
+        'wind+arcane':  { name: 'Rayo',             emoji: '⚡💨', dmg: 20, effect: null,     desc: 'Descarga' },
+    };
+
+    const ENEMIES = [
+        { name: 'Slime Oscuro', emoji: '🟢', hp:25, atk:5,  weak:'fire',   resist:'water',  tier:1 },
+        { name: 'Murciélago',   emoji: '🦇', hp:20, atk:7,  weak:'wind',   resist:'earth',  tier:1 },
+        { name: 'Esqueleto',    emoji: '💀', hp:30, atk:6,  weak:'earth',  resist:'wind',   tier:1 },
+        { name: 'Araña',        emoji: '🕷️', hp:28, atk:8,  weak:'fire',   resist:'arcane', tier:1 },
+        { name: 'Goblin',       emoji: '👺', hp:22, atk:9,  weak:'water',  resist:'fire',   tier:1 },
+        { name: 'Lobo Sombrío', emoji: '🐺', hp:35, atk:10, weak:'fire',   resist:'wind',   tier:2 },
+        { name: 'Golem',        emoji: '🗿', hp:50, atk:8,  weak:'water',  resist:'earth',  tier:2 },
+        { name: 'Espectro',     emoji: '👻', hp:32, atk:12, weak:'arcane', resist:'earth',  tier:2 },
+        { name: 'Troll',        emoji: '🧌', hp:45, atk:11, weak:'fire',   resist:'water',  tier:2 },
+        { name: 'Harpía',       emoji: '🦅', hp:30, atk:14, weak:'earth',  resist:'wind',   tier:2 },
+        { name: 'Hidra',        emoji: '🐉', hp:55, atk:13, weak:'arcane', resist:'fire',   tier:3 },
+        { name: 'Nigromante',   emoji: '🧙', hp:40, atk:16, weak:'fire',   resist:'arcane', tier:3 },
+        { name: 'Quimera',      emoji: '🦁', hp:60, atk:14, weak:'water',  resist:'earth',  tier:3 },
+        { name: 'Dragón Menor', emoji: '🐲', hp:70, atk:15, weak:'water',  resist:'fire',   tier:3 },
+        { name: 'Sr. Demonio',  emoji: '😈', hp:80, atk:18, weak:'arcane', resist:'fire',   tier:4 },
+        { name: 'Dragón Ancient',emoji:'🐉', hp:100,atk:20, weak:'arcane', resist:'water',  tier:4 },
+    ];
+
+    const RELICS_DB = [
+        { id:'cristal_astral', name:'Cristal Astral',    emoji:'💎', desc:'Primer combo -1 maná', effect:'cheapFirstCombo' },
+        { id:'corona_cenizas', name:'Corona de Cenizas', emoji:'👑', desc:'Quemadura +2 dmg',     effect:'burnPlus' },
+        { id:'reloj_vacio',    name:'Reloj del Vacío',   emoji:'⏰', desc:'3er combo = x2 dmg',   effect:'tripleCombo' },
+        { id:'baculo_sabio',   name:'Báculo del Sabio',  emoji:'🪄', desc:'+1 maná máximo',       effect:'extraMana' },
+        { id:'anillo_fenix',   name:'Anillo del Fénix',  emoji:'💍', desc:'Fuego +25% dmg',       effect:'fireBoost' },
+        { id:'amuleto_vida',   name:'Amuleto de Vida',   emoji:'🧿', desc:'+10 HP máximo',        effect:'hpBoost' },
+    ];
+
+    const INTENTIONS = [
+        { type:'attack', text:'Atacará por {dmg}', emoji:'⚔️' },
+        { type:'defend', text:'Ganará escudo +8',  emoji:'🛡️' },
+        { type:'buff',   text:'Se fortalecerá',    emoji:'💪' },
+        { type:'heavy',  text:'Carga ataque x2',   emoji:'💥' },
+    ];
+
+    function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
+    function comboKey(a,b){return [a,b].sort().join('+');}
+    function pick(a){return a[Math.floor(Math.random()*a.length)];}
+
+    let G={}, logEntries=[], popups=[], screen='menu';
+
+    function newGame(){
+        const deck=shuffle(Array.from({length:30},()=>pick(Object.keys(ELEMENTS))));
+        const hand=deck.splice(0,5);
+        G={hp:50,maxHp:50,mana:3,maxMana:3,shield:0,potions:2,floor:1,turn:1,score:0,
+            deck,hand,discard:[],enemy:spawnEnemy(1),selectedCards:[],
+            relics:[RELICS_DB[0]],comboCount:0,firstComboUsed:false,
+            dodgeChance:0,phase:'player',animating:false,gameOver:false,victory:false};
+        logEntries=[];
+        addLog('⚔️ Entras al Abismo!','sys');
+        addLog(`Piso ${G.floor}: ${G.enemy.name}!`,'sys');
+        screen='battle'; render(); save();
+    }
+
+    function spawnEnemy(floor){
+        const tier=floor<=3?1:floor<=6?2:floor<=9?3:4;
+        const pool=ENEMIES.filter(e=>e.tier===tier);
+        const base=pick(pool);
+        const s=1+(floor-1)*0.12;
+        return{...base,hp:Math.round(base.hp*s),maxHp:Math.round(base.hp*s),
+            atk:Math.round(base.atk*s),effects:[],intent:rollIntent(base),shieldBuff:0,atkBuff:1};
+    }
+    function rollIntent(e){
+        const r=Math.random();
+        if(r<0.6)return{...INTENTIONS[0],dmg:e.atk};
+        if(r<0.75)return INTENTIONS[1];
+        if(r<0.9)return INTENTIONS[2];
+        return{...INTENTIONS[3],dmg:e.atk*2};
+    }
+    function addLog(t,c='sys'){logEntries.push({t,c,ts:Date.now()});if(logEntries.length>6)logEntries.shift();}
+    function showPop(t,x,y,c){popups.push({t,x,y,c,ts:Date.now()});setTimeout(()=>{popups=popups.filter(p=>Date.now()-p.ts<900);render();},950);}
+    function drawToFull(){while(G.hand.length<5&&(G.deck.length>0||G.discard.length>0)){if(G.deck.length===0){G.deck=shuffle(G.discard);G.discard=[];}G.hand.push(G.deck.pop());}}
+    function hasRelic(id){return G.relics.some(r=>r.id===id);}
+
+    function calcDmg(els){
+        const e=G.enemy;
+        if(els.length===1){
+            let d=8;
+            if(els[0]===e.weak)d*=2;if(els[0]===e.resist)d*=0.5;
+            if(els[0]==='fire'&&hasRelic('anillo_fenix'))d*=1.25;
+            return{dmg:Math.round(d),name:ELEMENTS[els[0]].name,emoji:ELEMENTS[els[0]].emoji,effect:null,isW:els[0]===e.weak,isR:els[0]===e.resist};
+        }
+        const k=comboKey(els[0],els[1]);
+        const c=COMBOS[k]||{name:'Ataque',emoji:'⚔️',dmg:10,effect:null};
+        let d=c.dmg;
+        if(els.some(el=>el===e.weak))d*=1.5;
+        if(els.some(el=>el===e.resist))d*=0.7;
+        if(els.some(el=>el==='fire')&&hasRelic('anillo_fenix'))d*=1.25;
+        G.comboCount++;
+        if(hasRelic('reloj_vacio')&&G.comboCount%3===0)d*=2;
+        return{dmg:Math.round(d),...c,isW:els.some(el=>el===e.weak),isR:els.some(el=>el===e.resist)};
+    }
+
+    function playCards(){
+        if(G.animating||G.selectedCards.length===0||G.phase!=='player')return;
+        const els=G.selectedCards.map(i=>G.hand[i]);
+        let cost=els.length===1?1:2;
+        if(els.length===2&&!G.firstComboUsed&&hasRelic('cristal_astral')){cost=1;G.firstComboUsed=true;}
+        if(G.mana<cost){addLog('❌ Maná insuficiente','atk');render();return;}
+        G.mana-=cost; G.animating=true;
+        const r=calcDmg(els);
+        const sorted=[...G.selectedCards].sort((a,b)=>b-a);
+        sorted.forEach(i=>{G.discard.push(G.hand[i]);G.hand.splice(i,1);});
+        G.selectedCards=[];
+        G.enemy.hp=Math.max(0,G.enemy.hp-r.dmg);
+        let msg=`${r.emoji} ${r.name}: ${r.dmg}`;
+        if(r.isW)msg+=' 💥DÉBIL!';
+        addLog(msg, r.isW?'crit':'atk');
+        if(r.effect==='burn'){G.enemy.effects.push({type:'burn',turns:2,dmg:hasRelic('corona_cenizas')?5:3});addLog('  🔥 Quemadura','eff');}
+        if(r.effect==='freeze'){G.enemy.effects.push({type:'freeze',turns:1});addLog('  ❄️ Congelado','eff');}
+        if(r.effect==='stun'){G.enemy.effects.push({type:'stun',turns:1});addLog('  💫 Aturdido','eff');}
+        if(r.effect==='blind'){G.enemy.effects.push({type:'blind',turns:2});addLog('  👁️ Cegado','eff');}
+        if(r.effect==='slow'){G.enemy.effects.push({type:'slow',turns:2});addLog('  🐌 Lento','eff');}
+        if(r.effect==='dodge'){G.dodgeChance=0.5;addLog('  💨 Esquivar','eff');}
+        if(r.effect==='shield'){G.shield+=5;addLog('  🛡️ +5 escudo','eff');}
+        document.querySelector('.enemy')?.classList.add('shake');
+        showPop(`-${r.dmg}`,68,35,r.isW?'#f8f040':'#f85848');
+        setTimeout(()=>{
+            document.querySelector('.enemy')?.classList.remove('shake');
+            if(G.enemy.hp<=0){enemyWin();}else{render();}
+            G.animating=false;
+        },500);
+    }
+
+    function endTurn(){
+        if(G.animating||G.phase!=='player')return;
+        G.animating=true;G.phase='enemy';G.selectedCards=[];render();
+        setTimeout(()=>{enemyTurn();G.animating=false;},600);
+    }
+
+    function enemyTurn(){
+        const e=G.enemy; const nf=[];
+        for(const ef of e.effects){
+            if(ef.type==='burn'){e.hp=Math.max(0,e.hp-ef.dmg);addLog(`🔥 Quema: -${ef.dmg}`,'eff');}
+            if(ef.type==='freeze'||ef.type==='stun'){
+                addLog(`${ef.type==='freeze'?'❄️':'💫'} ${e.name} pierde turno!`,'heal');
+                if(ef.turns>1)nf.push({...ef,turns:ef.turns-1});
+                e.effects=nf;if(e.hp<=0){enemyWin();return;}startTurn();return;
+            }
+            if(ef.turns>1)nf.push({...ef,turns:ef.turns-1});
+        }
+        e.effects=nf;if(e.hp<=0){enemyWin();return;}
+        const it=e.intent;
+        if(it.type==='attack'||it.type==='heavy'){
+            let a=it.dmg||e.atk;
+            if(e.effects.some(ef=>ef.type==='slow'))a=Math.round(a*0.6);
+            a=Math.round(a*e.atkBuff);
+            const blind=e.effects.some(ef=>ef.type==='blind');
+            if(blind&&Math.random()<0.4){addLog(`👁️ ${e.name} falla!`,'heal');}
+            else if(Math.random()<G.dodgeChance){addLog('💨 ¡Esquivaste!','heal');}
+            else{
+                let fd=a;
+                if(G.shield>0){const bl=Math.min(G.shield,fd);G.shield-=bl;fd-=bl;if(bl>0)addLog(`🛡️ Escudo: -${bl}`,'eff');}
+                if(fd>0){G.hp-=fd;addLog(`💥 ${e.name}: -${fd} HP`,'atk');showPop(`-${fd}`,25,35,'#f85848');}
+            }
+        }else if(it.type==='defend'){e.shieldBuff+=8;addLog(`🛡️ ${e.name} +8 escudo`,'sys');}
+        else if(it.type==='buff'){e.atkBuff+=0.3;addLog(`💪 ${e.name} más fuerte!`,'atk');}
+        G.dodgeChance=0;e.intent=rollIntent(e);
+        if(G.hp<=0){G.hp=0;G.gameOver=true;addLog('💀 Aria ha caído...','atk');screen='gameover';render();save();return;}
+        startTurn();
+    }
+    function startTurn(){G.phase='player';G.turn++;G.mana=G.maxMana;drawToFull();render();save();}
+    function enemyWin(){
+        G.score+=G.floor*10;addLog(`🏆 ${G.enemy.name} derrotado! +${G.floor*10}`,'crit');
+        if(G.floor>=12){G.victory=true;G.gameOver=true;screen='gameover';}else{screen='reward';}
+        render();save();
+    }
+    function usePotion(){
+        if(G.potions<=0||G.hp>=G.maxHp||G.animating)return;
+        G.potions--;G.hp=Math.min(G.maxHp,G.hp+15);
+        addLog(`🧪 Poción: +15 HP (x${G.potions})`,'heal');render();save();
+    }
+    function selectReward(t){
+        if(t==='card'){const el=pick(Object.keys(ELEMENTS));G.deck.push(el);addLog(`📥 ${ELEMENTS[el].emoji} ${ELEMENTS[el].name}`,'heal');}
+        else if(t==='relic'){const av=RELICS_DB.filter(r=>!hasRelic(r.id));if(av.length){const r=pick(av);G.relics.push(r);addLog(`✨ ${r.name}`,'crit');if(r.effect==='extraMana'){G.maxMana++;G.mana=G.maxMana;}if(r.effect==='hpBoost'){G.maxHp+=10;G.hp+=10;}}}
+        else if(t==='heal'){G.hp=Math.min(G.maxHp,G.hp+20);addLog('💚 +20 HP','heal');}
+        else if(t==='potion'){G.potions++;addLog('🧪 +1 Poción','heal');}
+        else if(t==='remove'){if(G.deck.length>0){G.deck.pop();addLog('🗑️ Carta eliminada','sys');}}
+        nextFloor();
+    }
+    function nextFloor(){
+        G.floor++;G.turn=1;G.enemy=spawnEnemy(G.floor);G.mana=G.maxMana;
+        G.firstComboUsed=false;G.comboCount=0;G.dodgeChance=0;G.selectedCards=[];
+        drawToFull();addLog(`⚔️ Piso ${G.floor}: ${G.enemy.name}!`,'sys');
+        screen='battle';render();save();
+    }
+    function save(){try{localStorage.setItem('runas_v2s',JSON.stringify({G,screen}));}catch(e){}}
+    function loadGame(){try{const d=JSON.parse(localStorage.getItem('runas_v2s'));if(d&&d.G&&!d.G.gameOver){G=d.G;screen=d.screen||'battle';return true;}}catch(e){}return false;}
+    function getAvailCombos(){
+        const s=[...new Set(G.hand)],out=[];
+        for(let i=0;i<s.length;i++)for(let j=i;j<s.length;j++){
+            if(i===j&&G.hand.filter(c=>c===s[i]).length<2)continue;
+            const k=comboKey(s[i],s[j]);
+            if(COMBOS[k]&&!out.find(c=>c.key===k))out.push({key:k,...COMBOS[k],elements:[s[i],s[j]]});
+        }
+        return out.slice(0,4);
+    }
+
+    /* ================================================================
+       RENDER
+       ================================================================ */
+    function render(){
+        const root=document.getElementById('game');
+
+        if(screen==='menu'){
+            root.innerHTML=`
+      <div id="battle-bg"></div>
+      <div class="overlay" id="guide-overlay">
+        <div class="title-big">⚔️</div>
+        <h1>RUNAS DEL ABISMO</h1>
+        <div class="guide-box snes-box">
+          <div class="guide-line"><span class="g-icon">🃏</span><span class="g-txt">Selecciona <span class="g-hl">1 carta</span> y toca dos veces para jugarla, o selecciona <span class="g-hl">2 cartas</span> para lanzar un combo</span></div>
+          <hr class="guide-sep">
+          <div class="guide-line"><span class="g-icon">💥</span><span class="g-txt">Cada enemigo tiene una <span class="g-hl">debilidad</span> y una <span class="g-hl">resistencia</span> elemental. ¡Explótalas!</span></div>
+          <hr class="guide-sep">
+          <div class="guide-line"><span class="g-icon">🔮</span><span class="g-txt">Los combos causan <span class="g-hl">más daño</span> y aplican efectos: quemadura, congelación, ceguera...</span></div>
+          <hr class="guide-sep">
+          <div class="guide-line"><span class="g-icon">🧪</span><span class="g-txt">Usa <span class="g-hl">pociones</span> para recuperar HP. ¡Guárdalas para los pisos difíciles!</span></div>
+          <hr class="guide-sep">
+          <div class="guide-line"><span class="g-icon">🏆</span><span class="g-txt">Tras cada victoria elige una <span class="g-hl">recompensa</span>: cartas, reliquias o curación</span></div>
+          <hr class="guide-sep">
+          <div class="guide-line"><span class="g-icon">⏸</span><span class="g-txt">Puedes <span class="g-hl">pausar</span> en cualquier momento. Tu progreso se guarda automáticamente</span></div>
+        </div>
+        <div class="blink-text" id="press-start">— PRESIONA CUALQUIER TECLA PARA CONTINUAR —</div>
+      </div>`;
+            setupGuideListeners();
+            return;
+        }
+
+        if(screen==='gameover'){
+            root.innerHTML=`
+      <div id="battle-bg"></div>
+      <div class="overlay" id="gameover-overlay">
+        <div class="title-big">${G.victory?'👑':'💀'}</div>
+        <h1>${G.victory?'¡VICTORIA!':'HAS CAÍDO'}</h1>
+        <h2>Piso ${G.floor} · ${G.score} puntos</h2>
+        <div class="blink-text" id="press-retry">— PRESIONA CUALQUIER TECLA PARA REINTENTAR —</div>
+      </div>`;
+            setupGameOverListeners();
+            return;
+        }
+
+        if(screen==='reward'){
+            root.innerHTML=`
+      <div id="battle-bg"></div>
+      <div class="overlay">
+        <h1>🏆 ¡VICTORIA!</h1>
+        <h2>Elige tu recompensa</h2>
+        <div class="reward-grid">
+          <div class="reward-opt snes-box" onclick="selectReward('card')"><div class="rw-ico">🃏</div><div class="rw-nm">NUEVA CARTA</div><div class="rw-ds">Carta aleatoria</div></div>
+          <div class="reward-opt snes-box" onclick="selectReward('relic')"><div class="rw-ico">✨</div><div class="rw-nm">RELIQUIA</div><div class="rw-ds">Mejora pasiva</div></div>
+          <div class="reward-opt snes-box" onclick="selectReward('heal')"><div class="rw-ico">💚</div><div class="rw-nm">CURACIÓN</div><div class="rw-ds">+20 HP</div></div>
+          <div class="reward-opt snes-box" onclick="selectReward('potion')"><div class="rw-ico">🧪</div><div class="rw-nm">POCIÓN</div><div class="rw-ds">+1 poción</div></div>
+          <div class="reward-opt snes-box" onclick="selectReward('remove')"><div class="rw-ico">🗑️</div><div class="rw-nm">PURGAR</div><div class="rw-ds">Eliminar carta</div></div>
+        </div>
+      </div>`;
+            return;
+        }
+
+        // ---- BATTLE ----
+        const e=G.enemy;
+        const hpP=(G.hp/G.maxHp)*100;
+        const eP=(e.hp/e.maxHp)*100;
+        const combos=getAvailCombos();
+        const iText=e.intent.text.replace('{dmg}',e.intent.dmg||e.atk);
+
+        root.innerHTML=`
+    <div id="battle-bg"></div>
+
+    <!-- ===== TOP HUD ===== -->
+    <div id="top-hud">
+      <div class="player-hud">
+        <div class="player-portrait snes-box">🧙‍♀️</div>
+        <div class="player-stats">
+          <div class="player-name">ARIA</div>
+          <div class="stat-row">
+            <span class="stat-lbl" style="color:var(--snes-hp)">HP</span>
+            <div class="snes-bar" style="background:var(--snes-hp-bg)"><div class="snes-bar-fill hp" style="width:${hpP}%"></div></div>
+            <span class="stat-num">${G.hp}/${G.maxHp}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-lbl" style="color:var(--snes-mp)">MP</span>
+            <div class="snes-bar" style="background:var(--snes-mp-bg)"><div class="snes-bar-fill mp" style="width:${(G.mana/G.maxMana)*100}%"></div></div>
+            <span class="stat-num">${G.mana}/${G.maxMana}</span>
+          </div>
+        </div>
+      </div>
+      <div class="floor-box snes-box">
+        <div class="floor-txt">💀 PISO</div>
+        <div class="floor-num">${String(G.floor).padStart(2,'0')}</div>
+        <div class="turn-txt">Turno ${G.turn}</div>
+      </div>
+      <div class="enemy-hud">
+        <div class="enemy-name">${e.name.toUpperCase()}</div>
+        <div class="stat-row" style="justify-content:flex-end">
+          <span class="stat-num" style="text-align:left">${e.hp}/${e.maxHp}</span>
+          <div class="snes-bar" style="background:var(--snes-hp-bg)"><div class="snes-bar-fill hp" style="width:${eP}%"></div></div>
+        </div>
+        <div class="weak-row">DÉBIL: ${ELEMENTS[e.weak].emoji}  RES: ${ELEMENTS[e.resist].emoji}</div>
+        ${e.effects.length?`<div class="enemy-effects-row">${e.effects.map(ef=>`<span class="eff-pip">${ef.type==='burn'?'🔥':ef.type==='freeze'?'❄️':ef.type==='stun'?'💫':ef.type==='blind'?'👁️':'🐌'}${ef.turns}</span>`).join('')}</div>`:''}
+      </div>
+    </div>
+
+    <!-- ===== BATTLE AREA ===== -->
+    <div id="battle-area">
+      <div class="potion-zone">
+        <button class="potion-btn snes-box" onclick="usePotion()" ${G.potions<=0||G.hp>=G.maxHp?'disabled':''}>
+          <span class="potion-icon">🧪</span>
+          <span class="potion-num">x${G.potions}</span>
+        </button>
+      </div>
+
+      <div class="battle-field">
+        <!-- PLAYER -->
+        <div class="sprite-zone">
+          <div class="sprite-char player" id="p-sprite">🧙‍♀️</div>
+          <div class="sprite-shadow"></div>
+          <div class="buffs-row">
+            ${G.shield>0?`<span class="buff-pip">🛡️${G.shield}</span>`:''}
+            ${G.dodgeChance>0?`<span class="buff-pip">💨</span>`:''}
+          </div>
+        </div>
+
+        <!-- ENEMY -->
+        <div class="sprite-zone">
+          <div class="sprite-char enemy" id="e-sprite">${e.emoji}</div>
+          <div class="sprite-shadow"></div>
+          <div class="intent-bubble">${e.intent.emoji} ${iText}</div>
+        </div>
+      </div>
+
+      <div class="end-turn-zone">
+        <button class="end-turn-btn snes-box" onclick="endTurn()">TERMINAR<br>TURNO</button>
+      </div>
+
+      ${popups.filter(p=>Date.now()-p.ts<900).map(p=>`<div class="dmg-pop" style="left:${p.x}%;top:${p.y}%;color:${p.c}">${p.t}</div>`).join('')}
+    </div>
+
+    <!-- ===== LOG ===== -->
+    <div id="combat-log">
+      ${logEntries.map(l=>`<div class="log-line ${l.c}">${l.t}</div>`).join('')}
+    </div>
+
+    <!-- ===== CARDS ===== -->
+    <div id="bottom-section">
+      <div class="card-hint">COMBINA 2 CARTAS PARA LANZAR UN HECHIZO</div>
+      <div class="cards-layout">
+        <div class="side-left">
+          <div class="mana-orb"><span class="mana-val">${G.mana}/${G.maxMana}</span><span class="mana-lbl">MANÁ</span></div>
+          <div class="deck-box snes-box"><div class="deck-ico">🃏</div><div class="deck-val">${G.deck.length}</div><div class="deck-lbl">MAZO</div></div>
+        </div>
+        <div class="hand-area">
+          ${G.hand.map((el,i)=>{
+            const em=ELEMENTS[el];const s=G.selectedCards.includes(i);
+            return`<div class="card-snes snes-box ${em.cls} ${s?'sel':''}" onclick="toggleCard(${i})">
+              <div class="card-cost-pip">1</div>
+              <div class="card-art-area">${em.emoji}</div>
+              <div class="card-title">${em.name}</div>
+              <div class="card-stat">8 DMG</div>
+            </div>`;
+        }).join('')}
+        </div>
+        <div class="side-right">
+          <div class="combos-box snes-box">
+            <div class="combos-hdr">COMBOS DISPONIBLES</div>
+            ${combos.length?combos.map(c=>`<div class="combo-row">
+              <span class="combo-els">${c.elements.map(el=>ELEMENTS[el].emoji).join('+')}</span>
+              <div class="combo-det"><div class="combo-nm">${c.name.toUpperCase()}</div><div class="combo-dv">${c.dmg} DMG</div></div>
+              ${c.effect?`<span class="combo-fx">${c.effect==='burn'?'🔥':c.effect==='freeze'?'❄️':c.effect==='stun'?'💫':c.effect==='blind'?'👁️':c.effect==='slow'?'🐌':c.effect==='dodge'?'💨':c.effect==='shield'?'🛡️':'⚔️'}</span>`:''}
+            </div>`).join(''):'<div class="combo-row" style="color:var(--snes-gray)">—</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BOTTOM BAR ===== -->
+    <div id="bottom-bar">
+      <button class="bar-btn"><span>RELIQUIAS</span><span class="relic-row">${G.relics.map(r=>r.emoji).join('')}</span></button>
+      <button class="bar-btn" onclick="alert('${e.name}\\nHP: ${e.hp}/${e.maxHp}\\nATK: ${e.atk}\\nDébil: ${ELEMENTS[e.weak].name}\\nResiste: ${ELEMENTS[e.resist].name}')">🔍 VER ENEMIGO</button>
+      <button class="bar-btn" onclick="save();screen='menu';render()">⏸ MENÚ</button>
+    </div>`;
+    }
+
+    // ---- INTERACTIONS ----
+    function toggleCard(idx){
+        if(G.animating||G.phase!=='player')return;
+        if(G.selectedCards.includes(idx)){G.selectedCards=G.selectedCards.filter(i=>i!==idx);}
+        else if(G.selectedCards.length<2){G.selectedCards.push(idx);}
+        if(G.selectedCards.length===2){setTimeout(()=>playCards(),200);}
+        else{render();}
+    }
+    let lastTap={idx:-1,ts:0};
+    const _toggle=toggleCard;
+    toggleCard=function(idx){
+        const now=Date.now();
+        if(lastTap.idx===idx&&now-lastTap.ts<400&&G.selectedCards.includes(idx)){playCards();lastTap={idx:-1,ts:0};return;}
+        lastTap={idx,ts:now};_toggle(idx);
+    };
+    function resumeGame(){screen='battle';render();}
+
+    // ---- Guide screen: press any key / tap to start ----
+    let guideCleanup=null;
+    function setupGuideListeners(){
+        if(guideCleanup)guideCleanup();
+        function onKey(ev){
+            // Ignore modifier keys alone
+            if(['Shift','Control','Alt','Meta'].includes(ev.key))return;
+            startFromGuide();
+        }
+        function onTap(ev){
+            startFromGuide();
+        }
+        document.addEventListener('keydown',onKey);
+        document.getElementById('guide-overlay')?.addEventListener('click',onTap);
+        guideCleanup=()=>{
+            document.removeEventListener('keydown',onKey);
+            document.getElementById('guide-overlay')?.removeEventListener('click',onTap);
+            guideCleanup=null;
+        };
+    }
+    function startFromGuide(){
+        if(guideCleanup)guideCleanup();
+        // Check for saved game first
+        if(loadGame()&&!G.gameOver){resumeGame();}
+        else{newGame();}
+    }
+
+    // ---- Game Over screen: press any key to retry ----
+    let goCleanup=null;
+    function setupGameOverListeners(){
+        if(goCleanup)goCleanup();
+        function onKey(ev){
+            if(['Shift','Control','Alt','Meta'].includes(ev.key))return;
+            retryFromGO();
+        }
+        function onTap(){ retryFromGO(); }
+        document.addEventListener('keydown',onKey);
+        document.getElementById('gameover-overlay')?.addEventListener('click',onTap);
+        goCleanup=()=>{
+            document.removeEventListener('keydown',onKey);
+            document.getElementById('gameover-overlay')?.removeEventListener('click',onTap);
+            goCleanup=null;
+        };
+    }
+    function retryFromGO(){
+        if(goCleanup)goCleanup();
+        newGame();
+    }
+
+    screen='menu';render();
+</script>
+</body>
+</html>
